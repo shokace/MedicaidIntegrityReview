@@ -60,8 +60,12 @@ h1 {
 .hero-grid {
   margin-top: 20px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
+}
+
+.hero-grid .card.stat {
+  grid-column: span 3;
 }
 
 main {
@@ -146,6 +150,25 @@ ul {
   padding-left: 18px;
 }
 
+.metric-item {
+  margin-bottom: 8px;
+}
+
+.metric-item:last-child {
+  margin-bottom: 0;
+}
+
+.metric-value {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.metric-note {
+  margin-top: 3px;
+  color: #b7c6d3;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 code {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.88em;
@@ -168,6 +191,15 @@ footer {
   padding: 0 20px 50px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+footer a {
+  color: var(--ink);
+  text-decoration-color: rgba(234, 242, 247, 0.65);
+}
+
+footer a:hover {
+  color: #d6e6f0;
 }
 
 @keyframes rise {
@@ -391,6 +423,57 @@ footer {
 
 .state-outliers-card {
   margin-top: 12px;
+}
+
+.info-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: help;
+  border-bottom: 1px dotted #8ea0af;
+}
+
+.info-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid #8ea0af;
+  color: #d9e5ee;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.64rem;
+  line-height: 1;
+}
+
+.info-label::after {
+  content: attr(data-help);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: min(320px, 70vw);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #4f6476;
+  background: #10181f;
+  color: #e6eef4;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  white-space: normal;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 100ms ease, transform 100ms ease;
+  z-index: 20;
+}
+
+.info-label:hover::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .risk-chip {

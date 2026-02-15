@@ -60,7 +60,7 @@ const fallback = {
 };
 
 const fallbackScore = {
-  rule: "If 3+ independent signal families fail -> dataset likely synthetic or altered",
+  rule: "If 3+ independent check groups fail, flag for deeper review",
   fail_count: 1,
   family_total: 5,
   raw_fail_count: 2,
@@ -91,7 +91,7 @@ const fallbackPeerOutlierBundle = {
   default_state: "ALL",
   available_states: ["ALL"],
   methodology: {
-    peer_cell: "state x HCPCS_CODE x CLAIM_FROM_MONTH",
+    peer_cell: "providers compared to similar providers in the same state",
     disclaimer: "Provider outlier ranking is a screening signal and is not legal proof of fraud."
   },
   outliers: { ALL: [] }
@@ -99,34 +99,34 @@ const fallbackPeerOutlierBundle = {
 
 const explanations = {
   "Reimbursement ratio clustering": {
-    what: "This checks how much implied payment-per-claim varies inside each procedure code. The metric CV (coefficient of variation) is spread divided by average.",
-    why: "When CV is very high across high-volume procedures, it can indicate unstable or mixed generation patterns that need review.",
-    thresholds: "Fail thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
+    what: "This checks how much payment per claim changes within the same procedure code.",
+    why: "Big swings in similar services can be a warning sign.",
+    thresholds: "State-specific cutoff values are listed below."
   },
   "Last digit analysis": {
-    what: "This checks whether cents ending digits (0 through 9) of implied unit payment are unnaturally imbalanced.",
-    why: "Human-edited or scripted values often overuse certain endings. Natural data can still have bias, but extreme skew is suspicious.",
-    thresholds: "Fail thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
+    what: "This checks whether payment cents endings (0 to 9) are too uneven.",
+    why: "When just a few endings appear too often, data may be overly processed.",
+    thresholds: "State-specific cutoff values are listed below."
   },
   "Correlation structure": {
-    what: "This checks whether key fields still move together in expected ways within high-volume HCPCS strata.",
-    why: "If related fields become weakly connected after controlling for service mix, data may have been transformed inconsistently.",
-    thresholds: "Lower-bound thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
+    what: "This checks whether key numbers still move together in expected ways.",
+    why: "If related values stop moving together, the data may have been changed inconsistently.",
+    thresholds: "State-specific cutoff values are listed below."
   },
   "Temporal noise": {
-    what: "This checks month-to-month behavior for unrealistic smoothness.",
-    why: "Real systems usually show noise and shocks; synthetic series can look too smooth.",
-    thresholds: "Joint thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
+    what: "This checks if month-to-month trends look too smooth.",
+    why: "Real systems usually have bumps and shocks over time.",
+    thresholds: "State-specific cutoff values are listed below."
   },
   Entropy: {
-    what: "This measures variety in last-two-cent endings of implied unit payment using normalized entropy (0 to 1).",
-    why: "Lower entropy means too much repetition, which can appear in templated or copied values.",
-    thresholds: "Lower-bound threshold is calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
+    what: "This measures how much variety appears in the last two cents of payment values.",
+    why: "Low variety means too much repetition.",
+    thresholds: "State-specific cutoff values are listed below."
   },
   "Heaping detection (grid spacing)": {
-    what: "This checks how often implied unit-payment cents land on reimbursement-grid steps (especially 5-cent and 25-cent spacing).",
-    why: "Grid-based payment systems create some heaping naturally, but extreme concentration can indicate transformation artifacts.",
-    thresholds: "Upper-bound thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
+    what: "This checks whether values bunch up too much on pricing grid steps (like 5 or 25 cents).",
+    why: "Some bunching is normal in healthcare pricing, but too much can be a warning sign.",
+    thresholds: "State-specific cutoff values are listed below."
   }
 };
 
@@ -137,6 +137,15 @@ const SIGNAL_SECTION_IDS = {
   "Temporal noise": "time-series",
   Entropy: "entropy-detail",
   "Heaping detection (grid spacing)": "heaping-detail"
+};
+
+const SIGNAL_DISPLAY_NAMES = {
+  "Reimbursement ratio clustering": "Payment-per-Claim Spread",
+  "Last digit analysis": "Cents Pattern Check",
+  "Correlation structure": "Expected Relationships",
+  "Temporal noise": "Month-to-Month Movement",
+  Entropy: "Repetition Check",
+  "Heaping detection (grid spacing)": "Grid-Step Clustering"
 };
 
 const STATE_NAMES = {
@@ -257,6 +266,78 @@ const FIPS_TO_STATE = {
   "69": "MP",
   "72": "PR",
   "78": "VI"
+};
+
+const METRIC_LABELS = {
+  basis: "Measured on",
+  scope: "Compared within",
+  median_cv: "Typical spread",
+  p90_cv: "High-end spread",
+  max_abs_dev: "Largest cents imbalance",
+  chi_like: "Digit mismatch score",
+  ben_claims: "People vs claims relationship",
+  ben_paid: "People vs paid amount relationship",
+  claims_paid: "Claims vs paid amount relationship",
+  acf1_total_paid: "Month-to-month similarity",
+  smooth_ratio: "Month-to-month change rate",
+  normalized_entropy_last2: "Ending-value variety (0 to 1)",
+  share_on_5c_grid: "Values on 5-cent steps",
+  share_on_25c_grid: "Values on 25-cent steps",
+  max_cent_bucket_share: "Most common cents ending share",
+  threshold_median_cv_hi: "Fail if typical spread is above",
+  threshold_p90_cv_hi: "Fail if high-end spread is above",
+  threshold_max_abs_dev_hi: "Fail if largest cents imbalance is above",
+  threshold_chi_like_hi: "Fail if overall cents mismatch is above",
+  threshold_ben_claims_lo: "Fail if people vs claims relationship is below",
+  threshold_ben_paid_lo: "Fail if people vs paid relationship is below",
+  threshold_claims_paid_lo: "Fail if claims vs paid relationship is below",
+  threshold_acf1_hi: "Fail if month-to-month similarity is above",
+  threshold_smooth_ratio_lo: "Fail if change rate is below",
+  threshold_entropy_lo: "Fail if ending-value variety is below",
+  threshold_share_on_5c_grid_hi: "Fail if 5-cent clustering is above",
+  threshold_share_on_25c_grid_hi: "Fail if 25-cent clustering is above",
+  threshold_max_cent_bucket_share_hi: "Fail if most common cents ending share is above"
+};
+
+const METRIC_DESCRIPTIONS = {
+  basis: "This tells you which values were used for this check.",
+  scope: "This tells you which subset of data was compared.",
+  median_cv: "How spread out payment per claim is in typical high-volume procedure codes. Lower usually means more stable.",
+  p90_cv: "Spread near the high end (90th percentile) of high-volume procedure codes. Higher means more extreme variation.",
+  max_abs_dev: "Largest gap between observed and expected share for any one last-digit ending.",
+  chi_like: "One combined mismatch score across all last-digit endings. Higher means the overall pattern is less natural.",
+  ben_claims: "How strongly people served and claims move together. Closer to 1 means stronger linkage.",
+  ben_paid: "How strongly people served and paid amount move together. Closer to 1 means stronger linkage.",
+  claims_paid: "How strongly claims and paid amount move together. Closer to 1 means stronger linkage.",
+  acf1_total_paid: "How similar this month is to the previous month. Closer to 1 means very similar month to month.",
+  smooth_ratio: "How large month-to-month changes are relative to average paid amount. Lower means smoother behavior.",
+  normalized_entropy_last2: "Variety score of last-two-cent endings. Closer to 1 means more variety; lower means more repetition.",
+  share_on_5c_grid: "Percent of values landing on 5-cent steps (like .00, .05, .10).",
+  share_on_25c_grid: "Percent of values landing on 25-cent steps (like .00, .25, .50, .75).",
+  max_cent_bucket_share: "Largest share taken by any single last-two-cent ending bucket.",
+  threshold_median_cv_hi: "If Typical spread is above this cutoff, this check fails.",
+  threshold_p90_cv_hi: "If High-end spread is above this cutoff, this check fails.",
+  threshold_max_abs_dev_hi: "If Largest cents imbalance is above this cutoff, this check fails.",
+  threshold_chi_like_hi: "If Digit mismatch score is above this cutoff, this check fails.",
+  threshold_ben_claims_lo: "If People vs claims relationship is below this cutoff, this check fails.",
+  threshold_ben_paid_lo: "If People vs paid amount relationship is below this cutoff, this check fails.",
+  threshold_claims_paid_lo: "If Claims vs paid amount relationship is below this cutoff, this check fails.",
+  threshold_acf1_hi: "If Month-to-month similarity is above this cutoff, this check fails (too smooth).",
+  threshold_smooth_ratio_lo: "If Month-to-month change rate is below this cutoff, this check fails (too smooth).",
+  threshold_entropy_lo: "If Ending-value variety is below this cutoff, this check fails.",
+  threshold_share_on_5c_grid_hi: "If 5-cent-step share is above this cutoff, this check fails.",
+  threshold_share_on_25c_grid_hi: "If 25-cent-step share is above this cutoff, this check fails.",
+  threshold_max_cent_bucket_share_hi: "If the most common ending share is above this cutoff, this check fails."
+};
+
+const BASIS_LABELS = {
+  top_volume_hcpcs: "Payment per claim within high-volume procedure codes",
+  unit_paid: "Payment per claim values",
+  unit_paid_cents_last2: "Last two cents of payment-per-claim values"
+};
+
+const SCOPE_LABELS = {
+  within_hcpcs_top200_median: "Top 200 procedure codes (median relationships)"
 };
 
 const fmtPct = (n) => `${(n * 100).toFixed(2)}%`;
@@ -426,10 +507,57 @@ function barChart(canvas, values, labels, color, opts = {}) {
   }
 }
 
+function metricLabel(key) {
+  if (METRIC_LABELS[key]) return METRIC_LABELS[key];
+  return key
+    .replace(/^threshold_/, "threshold ")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function metricDescription(key) {
+  if (METRIC_DESCRIPTIONS[key]) return METRIC_DESCRIPTIONS[key];
+  return "This is a supporting metric used by this signal.";
+}
+
+function formatMetricValue(key, value) {
+  if (key === "basis") return BASIS_LABELS[String(value)] || String(value);
+  if (key === "scope") return SCOPE_LABELS[String(value)] || String(value);
+  if (typeof value !== "number") return String(value);
+
+  const percentKeys = new Set([
+    "max_abs_dev",
+    "smooth_ratio",
+    "share_on_5c_grid",
+    "share_on_25c_grid",
+    "max_cent_bucket_share",
+    "threshold_max_abs_dev_hi",
+    "threshold_smooth_ratio_lo",
+    "threshold_share_on_5c_grid_hi",
+    "threshold_share_on_25c_grid_hi",
+    "threshold_max_cent_bucket_share_hi"
+  ]);
+  if (percentKeys.has(key)) return fmtPct(value);
+
+  return fmtN(value);
+}
+
 function metricLines(signal) {
-  const m = signal.metrics || {};
-  return Object.entries(m)
-    .map(([k, v]) => `<li><code>${k}</code>: ${typeof v === "number" ? fmtN(v) : String(v)}</li>`)
+  const metrics = signal.metrics || {};
+  const entries = Object.entries(metrics).sort(([a], [b]) => {
+    const aThreshold = a.startsWith("threshold_") ? 1 : 0;
+    const bThreshold = b.startsWith("threshold_") ? 1 : 0;
+    if (aThreshold !== bThreshold) return aThreshold - bThreshold;
+    return a.localeCompare(b);
+  });
+  return entries
+    .map(
+      ([key, value]) => `
+        <li class="metric-item">
+          <div><strong>${metricLabel(key)}:</strong> <span class="metric-value">${formatMetricValue(key, value)}</span></div>
+          <div class="metric-note">${metricDescription(key)}</div>
+        </li>`
+    )
     .join("");
 }
 
@@ -438,33 +566,33 @@ function findingText(signal) {
   const name = signal.name;
   if (name === "Reimbursement ratio clustering") {
     return f
-      ? "This failed because reimbursement spread metrics were well above threshold, indicating unusually high instability in implied unit payment structure."
-      : "This passed because reimbursement spread stayed within the configured tolerance range.";
+      ? "This failed because payment-per-claim spread was higher than the cutoff."
+      : "This passed because payment-per-claim spread stayed in range.";
   }
   if (name === "Last digit analysis") {
     return f
-      ? "This failed because implied unit-payment cents endings were heavily imbalanced relative to baseline expectations."
-      : "This passed because implied unit-payment cents endings remained within expected tolerance.";
+      ? "This failed because cents endings were more uneven than expected."
+      : "This passed because cents endings looked close to expected.";
   }
   if (name === "Correlation structure") {
     return f
-      ? "This failed because at least one median within-code relationship was weaker than threshold."
-      : "This passed because median within-code relationships met the minimum strength criteria.";
+      ? "This failed because at least one key relationship was weaker than the cutoff."
+      : "This passed because key relationships were strong enough.";
   }
   if (name === "Temporal noise") {
     return f
-      ? "This failed because the monthly pattern looked too smooth under the model's smoothness criteria."
-      : "This passed because the monthly series retained enough natural variation and was not overly smooth.";
+      ? "This failed because the timeline looked too smooth."
+      : "This passed because the timeline had enough normal ups and downs.";
   }
   if (name === "Entropy") {
     return f
-      ? "This failed because value diversity was low enough to indicate possible repetition beyond expected operational behavior."
-      : "This passed because value diversity remained high enough to avoid repetition concerns.";
+      ? "This failed because value variety was too low."
+      : "This passed because value variety was high enough.";
   }
   if (name === "Heaping detection (grid spacing)") {
     return f
-      ? "This failed because unit-payment cents were overly concentrated at reimbursement-grid spacing, beyond the configured tolerance."
-      : "This passed because heaping at reimbursement-grid spacing stayed within the configured tolerance.";
+      ? "This failed because too many values landed on the same grid steps."
+      : "This passed because grid-step clustering stayed in range.";
   }
   return f ? "This signal failed under configured thresholds." : "This signal passed under configured thresholds.";
 }
@@ -480,10 +608,10 @@ function renderSignalDetailBox(signalName, ids) {
 
   statusEl.innerHTML = `<strong>${signal.failed ? "FAIL" : "PASS"}</strong>`;
   explainEl.innerHTML = `
-    <strong>What this means:</strong> ${ref.what}<br>
-    <strong>Why this signal exists:</strong> ${ref.why}<br>
-    <strong>Threshold used:</strong> ${ref.thresholds}<br>
-    <strong>What happened in this dataset:</strong> ${findingText(signal)}
+    <strong>What this checks:</strong> ${ref.what}<br>
+    <strong>Why it matters:</strong> ${ref.why}<br>
+    <strong>Cutoff:</strong> ${ref.thresholds}<br>
+    <strong>Result here:</strong> ${findingText(signal)}
   `;
   metricsEl.innerHTML = metricLines(signal);
   boxEl.classList.remove("failed", "passed");
@@ -491,53 +619,54 @@ function renderSignalDetailBox(signalName, ids) {
 }
 
 function renderScore(score) {
-  document.getElementById("ruleText").textContent = score.rule || "-";
+  document.getElementById("ruleText").textContent = "If 3 or more independent groups fail, flag for deeper review.";
   const familyTotal = Number(score.family_total ?? 0);
   const familyFailCount = Number(score.fail_count ?? 0);
   const rawFailCount = Number(score.raw_fail_count ?? score.fail_count ?? 0);
   const verdictFailCount = Number.isFinite(rawFailCount) ? rawFailCount : familyFailCount;
   if (familyTotal > 0) {
-    document.getElementById("failCount").textContent = `${score.fail_count} of ${familyTotal} families (raw signal fails: ${rawFailCount} of ${(score.signals || []).length})`;
+    document.getElementById("failCount").textContent =
+      `${familyFailCount} of ${familyTotal} independent groups failed (${rawFailCount} of ${(score.signals || []).length} total checks failed)`;
   } else {
-    document.getElementById("failCount").textContent = `${score.fail_count} of ${(score.signals || []).length}`;
+    document.getElementById("failCount").textContent = `${familyFailCount} of ${(score.signals || []).length}`;
   }
 
   const verdictTextEl = document.getElementById("verdictText");
   const verdictLabelEl = document.getElementById("verdictLabel");
   const verdictRaw = score.verdict || "-";
   let verdictLabel = "PASSED";
-  let verdictSummary = "PASSED (<3 SIGNALS FAILED)";
+  let verdictSummary = "PASSED (fewer than 3 independent groups failed)";
   let verdictClass = "";
   if (verdictFailCount === 3) {
     verdictLabel = "INCONCLUSIVE";
-    verdictSummary = "INCONCLUSIVE (3 SIGNALS FAILED)";
+    verdictSummary = "INCONCLUSIVE (exactly 3 independent groups failed)";
     verdictClass = "verdict-inconclusive";
   } else if (verdictFailCount > 3 || verdictRaw === "LIKELY_SYNTHETIC_OR_ALTERED") {
     verdictLabel = "SUSPICIOUS";
-    verdictSummary = "SUSPICIOUS (>3 SIGNALS FAILED)";
+    verdictSummary = "SUSPICIOUS (more than 3 independent groups failed)";
     verdictClass = "verdict-alert";
   } else {
     verdictClass = "verdict-pass";
   }
 
   verdictTextEl.textContent = verdictSummary;
-  verdictLabelEl.textContent = verdictLabel;
+  if (verdictLabelEl) verdictLabelEl.textContent = verdictLabel;
   verdictTextEl.classList.remove("verdict-inconclusive", "verdict-alert", "verdict-pass");
-  verdictLabelEl.classList.remove("verdict-inconclusive", "verdict-alert", "verdict-pass");
+  if (verdictLabelEl) verdictLabelEl.classList.remove("verdict-inconclusive", "verdict-alert", "verdict-pass");
   verdictTextEl.style.color = "";
-  verdictLabelEl.style.color = "";
+  if (verdictLabelEl) verdictLabelEl.style.color = "";
   if (verdictClass) {
     verdictTextEl.classList.add(verdictClass);
-    verdictLabelEl.classList.add(verdictClass);
+    if (verdictLabelEl) verdictLabelEl.classList.add(verdictClass);
     if (verdictClass === "verdict-inconclusive") {
       verdictTextEl.style.color = "#ffd36a";
-      verdictLabelEl.style.color = "#ffd36a";
+      if (verdictLabelEl) verdictLabelEl.style.color = "#ffd36a";
     } else if (verdictClass === "verdict-alert") {
       verdictTextEl.style.color = "#ff5c5c";
-      verdictLabelEl.style.color = "#ff5c5c";
+      if (verdictLabelEl) verdictLabelEl.style.color = "#ff5c5c";
     } else if (verdictClass === "verdict-pass") {
       verdictTextEl.style.color = "#64d492";
-      verdictLabelEl.style.color = "#64d492";
+      if (verdictLabelEl) verdictLabelEl.style.color = "#64d492";
     }
   }
   window.__scoreSignals = score.signals || [];
@@ -547,16 +676,17 @@ function renderScore(score) {
   (score.signals || []).forEach((s) => {
     const article = document.createElement("article");
     const targetId = SIGNAL_SECTION_IDS[s.name];
+    const displayName = SIGNAL_DISPLAY_NAMES[s.name] || s.name;
     article.className = `card signal-card signal-card-link ${s.failed ? "failed" : "passed"}`;
     article.setAttribute("role", "button");
     article.setAttribute("tabindex", "0");
     article.innerHTML = `
       <div class="signal-head">
-        <h3>${s.name}</h3>
+        <h3>${displayName}</h3>
         <span class="badge ${s.failed ? "bad" : "good"}">${s.failed ? "FAIL" : "PASS"}</span>
       </div>
     `;
-    article.setAttribute("aria-label", `Go to ${s.name} detail`);
+    article.setAttribute("aria-label", `Go to ${displayName} detail`);
     if (targetId) {
       const jump = () => {
         const el = document.getElementById(targetId);
@@ -623,9 +753,9 @@ function renderReport(report) {
   const checks = document.getElementById("healthChecks");
   checks.innerHTML = "";
   [
-    ["Claims below the suppression floor (<12)", violations.claims_lt_12_rate],
-    ["Negative payment rows", violations.paid_negative_rate],
-    ["Beneficiaries greater than claims", violations.benef_gt_claims_rate]
+    ["Rows below the reporting minimum (fewer than 12 claims)", violations.claims_lt_12_rate],
+    ["Rows with negative paid amounts", violations.paid_negative_rate],
+    ["Rows where people served is greater than claims", violations.benef_gt_claims_rate]
   ].forEach(([k, v]) => {
     const li = document.createElement("li");
     li.textContent = `${k}: ${fmtPct(v || 0)}`;
@@ -651,15 +781,15 @@ function renderReport(report) {
   corrBody.innerHTML = "";
   const c = report.correlations || fallback.correlations;
   const pairs = [
-    ["Beneficiaries × Claims", c.TOTAL_UNIQUE_BENEFICIARIES?.TOTAL_CLAIMS],
-    ["Beneficiaries × Paid", c.TOTAL_UNIQUE_BENEFICIARIES?.TOTAL_PAID],
-    ["Claims × Paid", c.TOTAL_CLAIMS?.TOTAL_PAID]
+    ["People served and claims", c.TOTAL_UNIQUE_BENEFICIARIES?.TOTAL_CLAIMS],
+    ["People served and paid amount", c.TOTAL_UNIQUE_BENEFICIARIES?.TOTAL_PAID],
+    ["Claims and paid amount", c.TOTAL_CLAIMS?.TOTAL_PAID]
   ];
   const strat = c.within_hcpcs_top200;
   if (strat) {
-    pairs.push(["Within top-200 HCPCS median: Beneficiaries × Claims", strat.median_ben_claims]);
-    pairs.push(["Within top-200 HCPCS median: Beneficiaries × Paid", strat.median_ben_paid]);
-    pairs.push(["Within top-200 HCPCS median: Claims × Paid", strat.median_claims_paid]);
+    pairs.push(["Top 200 procedure codes: people served and claims", strat.median_ben_claims]);
+    pairs.push(["Top 200 procedure codes: people served and paid amount", strat.median_ben_paid]);
+    pairs.push(["Top 200 procedure codes: claims and paid amount", strat.median_claims_paid]);
   }
   pairs.forEach(([name, v]) => {
     corrBody.appendChild(row(`<td>${name}</td><td>${Number(v || 0).toFixed(3)}</td>`));
@@ -674,7 +804,7 @@ function renderReport(report) {
   });
 
   const vol = report.temporal?.volatility || fallback.temporal.volatility;
-  const vLabels = ["paid", "claims", "beneficiaries"];
+  const vLabels = ["paid amount", "claims", "people served"];
   const vVals = [vol.paid_delta_std, vol.claims_delta_std, vol.bens_delta_std].map((x) => Number(x || 0));
   barChart(document.getElementById("volChart"), vVals, vLabels, "#f2a900", {
     valueFormatter: (v) => fmtNum(Math.round(v)),
@@ -735,11 +865,11 @@ function renderPeerOutliers() {
   const rows = resolvePeerOutliersForState(activeState);
   const method = peerOutlierBundle.methodology || {};
   const scope = activeState === "ALL" ? "national scope" : `${stateDisplayName(activeState)} scope`;
-  summary.textContent = `Top providers in ${scope}, ranked by peer-relative outlier score (${method.peer_cell || "state-level provider peers"}). This is an anomaly-screening signal, not legal proof.`;
+  summary.textContent = `Top providers in ${scope}, ranked by how different they look from peers (${method.peer_cell || "state-level provider peers"}). A higher risk label means bigger differences, not proof of fraud.`;
 
   body.innerHTML = "";
   if (!rows.length) {
-    body.appendChild(row(`<td colspan="9">No provider outliers met the minimum peer-cell and volume thresholds for ${stateDisplayName(activeState)}.</td>`));
+    body.appendChild(row(`<td colspan="9">No providers in ${stateDisplayName(activeState)} had enough data to score reliably.</td>`));
     return;
   }
 
@@ -765,7 +895,7 @@ function renderPeerOutliers() {
 function updateStateNote() {
   const note = document.getElementById("stateSelectionNote");
   if (!note) return;
-  note.textContent = `State: ${stateDisplayName(activeState)}`;
+  note.textContent = `Selected area: ${stateDisplayName(activeState)}`;
 }
 
 function updateMapActiveState() {
