@@ -2,6 +2,10 @@
 
 Static website shell for publishing Medicaid data-generation forensics findings.
 
+## Source Data
+- Original government open data source: [HHS Open Data](https://opendata.hhs.gov/)
+- Provider/state enrichment source: CMS NPPES Data Dissemination file (National Plan and Provider Enumeration System), loaded from `data/nppes/NPPES_Data_Dissemination_*.zip`
+
 ## Files
 - `index.html`: report layout and sections
 - `styles.css`: visual design and responsive behavior

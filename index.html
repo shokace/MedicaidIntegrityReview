@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <div class="noise"></div>
@@ -107,34 +107,36 @@
             Providers are ranked by how far they differ from peers in the selected area.
             This is a screening signal, not legal proof.
           </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Provider NPI</th>
-                <th>State</th>
-                <th>
-                  <span class="info-label" data-help="Risk label based on how unusual this provider looks versus peers. HIGH: score >= 3.5 or far-from-normal share >= 0.40; ELEVATED: score >= 2.8 or share >= 0.25; WATCH: score >= 2.2 or share >= 0.15; otherwise LOW.">Risk <span class="info-dot">i</span></span>
-                </th>
-                <th>
-                  <span class="info-label" data-help="One combined score showing how far this provider is from peer averages. Higher means more unusual.">How Unusual <span class="info-dot">i</span></span>
-                </th>
-                <th>
-                  <span class="info-label" data-help="Share of checks that are very far from peers (3+ standard deviations, also called 3 sigma). Higher means more extreme differences.">Extreme Rows <span class="info-dot">i</span></span>
-                </th>
-                <th>
-                  <span class="info-label" data-help="How many valid peer comparisons were available for this provider. More comparisons usually means a more stable score.">Peer Comparisons <span class="info-dot">i</span></span>
-                </th>
-                <th>
-                  <span class="info-label" data-help="Total number of claims for this provider in the selected geography.">Total Claims <span class="info-dot">i</span></span>
-                </th>
-                <th>
-                  <span class="info-label" data-help="Total paid amount for this provider in the selected geography.">Total Paid <span class="info-dot">i</span></span>
-                </th>
-              </tr>
-            </thead>
-            <tbody id="peerOutlierTable"></tbody>
-          </table>
+          <div class="table-wrap table-wide">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Provider NPI</th>
+                  <th>State</th>
+                  <th>
+                    <span class="info-label" data-help="Risk label based on how unusual this provider looks versus peers. HIGH: score >= 3.5 or far-from-normal share >= 0.40; ELEVATED: score >= 2.8 or share >= 0.25; WATCH: score >= 2.2 or share >= 0.15; otherwise LOW.">Risk <span class="info-dot">i</span></span>
+                  </th>
+                  <th>
+                    <span class="info-label" data-help="One combined score showing how far this provider is from peer averages. Higher means more unusual.">How Unusual <span class="info-dot">i</span></span>
+                  </th>
+                  <th>
+                    <span class="info-label" data-help="Share of checks that are very far from peers (3+ standard deviations, also called 3 sigma). Higher means more extreme differences.">Extreme Rows <span class="info-dot">i</span></span>
+                  </th>
+                  <th>
+                    <span class="info-label" data-help="How many valid peer comparisons were available for this provider. More comparisons usually means a more stable score.">Peer Comparisons <span class="info-dot">i</span></span>
+                  </th>
+                  <th>
+                    <span class="info-label" data-help="Total number of claims for this provider in the selected geography.">Total Claims <span class="info-dot">i</span></span>
+                  </th>
+                  <th>
+                    <span class="info-label" data-help="Total paid amount for this provider in the selected geography.">Total Paid <span class="info-dot">i</span></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="peerOutlierTable"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -159,10 +161,12 @@
         </p>
         <div class="card">
           <h3>Procedure Codes With Highest Instability</h3>
-          <table>
-            <thead><tr><th>Procedure Code</th><th>Claims</th><th>Spread</th><th>Alert Score</th></tr></thead>
-            <tbody id="hcpcsTable"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Procedure Code</th><th>Claims</th><th>Spread</th><th>Alert Score</th></tr></thead>
+              <tbody id="hcpcsTable"></tbody>
+            </table>
+          </div>
         </div>
         <div class="card" id="signal1Box">
           <h3>Signal 1 Result</h3>
@@ -198,10 +202,12 @@
         </p>
         <div class="card">
           <h3>Core Correlations</h3>
-          <table>
-            <thead><tr><th>Pair</th><th>Correlation</th></tr></thead>
-            <tbody id="corrTable"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pair</th><th>Correlation</th></tr></thead>
+              <tbody id="corrTable"></tbody>
+            </table>
+          </div>
         </div>
         <div class="card" id="signal3Box">
           <h3>Signal 3 Result</h3>
@@ -311,10 +317,12 @@
           </div>
           <div class="card">
             <h3>Missingness by Column</h3>
-            <table>
-              <thead><tr><th>Column</th><th>Missing %</th></tr></thead>
-              <tbody id="missingnessTable"></tbody>
-            </table>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Column</th><th>Missing %</th></tr></thead>
+                <tbody id="missingnessTable"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -342,6 +350,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
   </body>
 </html>

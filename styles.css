@@ -139,6 +139,16 @@ table {
   font-size: 0.92rem;
 }
 
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wide table {
+  min-width: 860px;
+}
+
 th, td {
   text-align: left;
   border-bottom: 1px solid #26333d;
@@ -175,6 +185,7 @@ code {
   background: #334554;
   padding: 1px 5px;
   border-radius: 6px;
+  overflow-wrap: anywhere;
 }
 
 canvas {
@@ -507,4 +518,68 @@ footer a:hover {
   color: #d8efe1;
   background: #234336;
   border-color: #3d7a60;
+}
+
+@media (max-width: 680px) {
+  header.hero {
+    padding: 26px 14px 14px;
+  }
+
+  main {
+    padding: 6px 12px 32px;
+    gap: 10px;
+  }
+
+  .panel {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .card {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .subtitle {
+    font-size: 0.94rem;
+    line-height: 1.45;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+  }
+
+  h3 {
+    font-size: 0.95rem;
+  }
+
+  th,
+  td {
+    padding: 7px 5px;
+    font-size: 0.84rem;
+  }
+
+  .state-controls {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .state-controls select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .us-map {
+    min-height: 250px;
+  }
+
+  .table-wide table {
+    min-width: 760px;
+  }
+
+  .info-label::after {
+    width: min(280px, 85vw);
+    left: auto;
+    right: 0;
+  }
 }

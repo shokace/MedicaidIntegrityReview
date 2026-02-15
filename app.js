@@ -352,6 +352,8 @@ let scoreBundle = fallbackScoreBundle;
 let peerOutlierBundle = fallbackPeerOutlierBundle;
 let mapPaths = null;
 let mapPuertoRicoPath = null;
+let currentMapStates = [];
+let resizeMapTimer = null;
 
 function getTooltip() {
   let el = document.getElementById("chartTooltip");
@@ -940,6 +942,7 @@ async function renderUSMap(states) {
   if (!container) return;
   container.innerHTML = "";
   mapPuertoRicoPath = null;
+  currentMapStates = Array.isArray(states) ? states : [];
 
   if (!window.d3 || !window.topojson) {
     const note = document.createElement("p");
@@ -960,8 +963,8 @@ async function renderUSMap(states) {
   }
 
   const geo = window.topojson.feature(mapData, mapData.objects.states);
-  const width = Math.max(container.clientWidth, 920);
-  const height = 380;
+  const width = Math.max(container.clientWidth || 0, 320);
+  const height = window.innerWidth <= 680 ? 250 : 380;
   const projection = window.d3.geoAlbersUsa().fitSize([width, height], geo);
   const path = window.d3.geoPath(projection);
   const codeFor = (d) => FIPS_TO_STATE[String(d.id).padStart(2, "0")] || "";
@@ -1045,6 +1048,15 @@ async function renderUSMap(states) {
   container.appendChild(svg.node());
 }
 
+function scheduleMapResize() {
+  if (!currentMapStates.length) return;
+  if (resizeMapTimer) window.clearTimeout(resizeMapTimer);
+  resizeMapTimer = window.setTimeout(async () => {
+    await renderUSMap(currentMapStates);
+    updateMapActiveState();
+  }, 140);
+}
+
 loadData().then(async ({ reports, scores, peerOutliers }) => {
   reportBundle = reports || fallbackReportBundle;
   scoreBundle = scores || fallbackScoreBundle;
@@ -1054,5 +1066,6 @@ loadData().then(async ({ reports, scores, peerOutliers }) => {
   const defaultState = reportBundle.default_state || scoreBundle.default_state || "ALL";
   setupStateSelector(states, defaultState);
   await renderUSMap(states);
+  window.addEventListener("resize", scheduleMapResize);
   renderActiveState();
 });
