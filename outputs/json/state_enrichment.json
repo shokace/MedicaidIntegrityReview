@@ -1,0 +1,78 @@
+{
+  "nppes_zip": "data/nppes/NPPES_Data_Dissemination_February_2026.zip",
+  "parquet": "/Users/ezkie/Downloads/medicaid-provider-spending.parquet",
+  "target_npi_count": 1802136,
+  "lookup_count": 1797960,
+  "matched_nppes_rows": 1797960,
+  "lookup_csv": "outputs/tables/npi_state_lookup.csv",
+  "billing_row_state_coverage_rate": 0.9950401429896046,
+  "servicing_row_state_coverage_rate": 0.9832259138317196,
+  "billing_rows_total": 227083361,
+  "billing_rows_with_state": 225957060,
+  "servicing_rows_total": 217593016,
+  "servicing_rows_with_state": 213943092,
+  "state_rollup_csv": "outputs/tables/state_rollup_by_billing_state.csv",
+  "preview_csv": "outputs/tables/medicaid_with_state_preview.csv",
+  "top_10_states_by_rows": [
+    {
+      "state": "CA",
+      "rows": 30697209,
+      "total_claims": 2546687380.0,
+      "total_paid": 129441325496.57025
+    },
+    {
+      "state": "NY",
+      "rows": 16239393,
+      "total_claims": 1682503893.0,
+      "total_paid": 144765029876.17
+    },
+    {
+      "state": "OH",
+      "rows": 12873158,
+      "total_claims": 865563457.0,
+      "total_paid": 36975526844.24998
+    },
+    {
+      "state": "TX",
+      "rows": 11256913,
+      "total_claims": 1113280215.0,
+      "total_paid": 56225439624.00002
+    },
+    {
+      "state": "FL",
+      "rows": 10386628,
+      "total_claims": 940537941.0,
+      "total_paid": 34029445744.719986
+    },
+    {
+      "state": "NC",
+      "rows": 8424701,
+      "total_claims": 821962562.0,
+      "total_paid": 34821113355.33
+    },
+    {
+      "state": "TN",
+      "rows": 6945403,
+      "total_claims": 413239281.0,
+      "total_paid": 20396844756.460003
+    },
+    {
+      "state": "LA",
+      "rows": 6916648,
+      "total_claims": 421024467.0,
+      "total_paid": 19377368647.260002
+    },
+    {
+      "state": "MA",
+      "rows": 6474163,
+      "total_claims": 790067964.0,
+      "total_paid": 56028946842.93998
+    },
+    {
+      "state": "NJ",
+      "rows": 6212273,
+      "total_claims": 784169900.0,
+      "total_paid": 46950355093.84
+    }
+  ]
+}

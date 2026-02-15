@@ -1,0 +1,26 @@
+# macOS metadata
+.DS_Store
+._*
+
+# Python env/cache
+.venv/
+__pycache__/
+*.py[cod]
+
+# Raw/source data (too large for repo)
+data/
+
+# Temporary/runtime artifacts
+outputs/tmp/
+*.duckdb
+*.duckdb.wal
+*.log
+*.pid
+
+# Large intermediate tables not needed for site runtime
+outputs/tables/npi_state_lookup.csv
+outputs/tables/medicaid_with_state_preview.csv
+outputs/tables/state_rollup_by_billing_state.csv
+
+# If present, keep Git from tracking zipped dumps
+*.zip

@@ -1,0 +1,67 @@
+{
+  "rule": "If 3+ independent signal families fail -> dataset likely synthetic or altered",
+  "fail_count": 2,
+  "family_total": 5,
+  "raw_fail_count": 3,
+  "family_failures": {
+    "reimbursement_ratio_clustering": false,
+    "digit_structure_family": true,
+    "correlation_structure": true,
+    "temporal_noise": false,
+    "benford_supporting": false
+  },
+  "signals": [
+    {
+      "name": "Reimbursement ratio clustering",
+      "failed": false,
+      "metrics": {
+        "basis": "top_volume_hcpcs",
+        "median_cv": 1.448132041610374,
+        "p90_cv": 4.45038561156561
+      }
+    },
+    {
+      "name": "Last digit analysis",
+      "failed": true,
+      "metrics": {
+        "basis": "unit_paid",
+        "max_abs_dev": 0.16265827111833173,
+        "chi_like": 0.29404795472602435
+      }
+    },
+    {
+      "name": "Correlation structure",
+      "failed": true,
+      "metrics": {
+        "scope": "within_hcpcs_top200_median",
+        "ben_claims": 0.5088717540187285,
+        "ben_paid": 0.1934225065434099,
+        "claims_paid": 0.7470577199619567
+      }
+    },
+    {
+      "name": "Temporal noise",
+      "failed": false,
+      "metrics": {
+        "acf1_total_paid": 0.8899485634386731,
+        "smooth_ratio": 0.10781251996962633
+      }
+    },
+    {
+      "name": "Entropy",
+      "failed": true,
+      "metrics": {
+        "basis": "unit_paid",
+        "normalized_entropy_last2": 0.9183221424529806
+      }
+    },
+    {
+      "name": "Benford (provider-year)",
+      "failed": false,
+      "metrics": {
+        "chi_like": 2.529278746277481e-05
+      }
+    }
+  ],
+  "verdict": "NOT_FLAGGED_BY_3PLUS_RULE"
+}

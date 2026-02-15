@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Medicaid Data Integrity Review</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=4" />
+  </head>
+  <body>
+    <div class="noise"></div>
+    <header class="hero">
+      <p class="eyebrow">Medicaid Provider Spending, Jan 2018 - Dec 2024</p>
+      <h1>Medicaid Data Integrity Review</h1>
+      <p class="subtitle">
+        This site is a forensic quality check on a very large Medicaid spending table. We are not making legal allegations against people or organizations.
+        We are testing whether the numbers themselves look like they came from a real production system, versus being heavily edited, partially synthesized,
+        or transformed in ways that changed their natural statistical structure.
+      </p>
+      <div class="hero-grid">
+        <div class="card stat">
+          <span>Rows analyzed</span>
+          <strong id="rowsAnalyzed">-</strong>
+        </div>
+        <div class="card stat">
+          <span>Duplicate key rate</span>
+          <strong id="dupRate">-</strong>
+        </div>
+        <div class="card stat">
+          <span>Final rule verdict</span>
+          <strong id="verdictLabel">-</strong>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel" id="read-this-first">
+        <h2>Read This First</h2>
+        <p>
+          We follow a strict ordered workflow with six statistical checks grouped into five independent signal families. The order matters because early checks give context for later checks.
+          A single failed signal is not enough. Some failure is expected in real healthcare data because billing systems are complicated. The decision rule here is:
+          if <strong>3 or more independent signal families fail</strong>, the dataset is flagged as <strong>likely synthetic or altered</strong> at the dataset level.
+        </p>
+        <p>
+          This is a <strong>screening framework</strong>. It is best used as a data integrity warning system. It does not by itself prove criminal conduct,
+          intent, or payer/provider fraud. It only says whether the dataset behaves like a naturally generated system output under these tests.
+        </p>
+      </section>
+
+      <section class="panel" id="plain-language-definitions">
+        <h2>Plain-Language Definitions</h2>
+        <div class="grid-2">
+          <div class="card prose-block">
+            <h3>What is a "ratio"?</h3>
+            <p>
+              A ratio is one number divided by another. Here, a key ratio is <code>TOTAL_PAID / TOTAL_CLAIMS</code>, which acts like an implied payment per claim.
+              If this jumps around too wildly in places where behavior should be more stable, it can indicate inconsistent data generation.
+            </p>
+            <h3>What is "correlation"?</h3>
+            <p>
+              Correlation is a number from -1 to +1 that tells us how strongly two variables move together. Closer to +1 means strong positive relationship.
+              In billing aggregates, some relationships should usually be reasonably strong. If they are unexpectedly weak, structure may have been disrupted.
+            </p>
+            <h3>What is "entropy"?</h3>
+            <p>
+              Entropy is a measure of randomness or variety. High entropy means values are spread out; low entropy means values repeat too much.
+              Repetition beyond what the process should produce can be a sign of templating, copy-paste behavior, or synthetic generation.
+            </p>
+          </div>
+          <div class="card prose-block">
+            <h3>What is "temporal noise"?</h3>
+            <p>
+              Temporal means over time. Noise is natural month-to-month irregularity. Real systems are usually messy. If a long time series is too smooth,
+              it can mean someone generated numbers to look clean rather than capturing real operational variation.
+            </p>
+            <h3>What is "Benford"?</h3>
+            <p>
+              Benford's Law predicts how often first digits (1 through 9) appear in many naturally occurring datasets. In healthcare claims,
+              Benford can be misused on the wrong level. We only use it on broad aggregates as a final supporting check, never as a primary proof.
+            </p>
+            <h3>What does "fail" mean here?</h3>
+            <p>
+              Fail means the metric crossed a pre-set threshold in a way that is unusual under this methodology. It does not mean guilt.
+              It means the dataset deserves extra validation before high-stakes decisions are made.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="state-view">
+        <h2>State Lens</h2>
+        <p>
+          National totals can mask localized structure. Select a state to rerun the same interpretation on that state slice. All cards, charts, tables, and verdicts below update.
+        </p>
+        <div class="state-controls">
+          <label for="stateSelect">Selected geography</label>
+          <select id="stateSelect"></select>
+          <p id="stateSelectionNote">State: ALL</p>
+        </div>
+        <div id="usMap" class="us-map" aria-label="Interactive United States map"></div>
+      </section>
+
+      <section class="panel" id="scorecard">
+        <h2>Signal Scorecard (Ordered Workflow)</h2>
+        <p>
+          Compact summary of pass/fail by signal. Full interpretation and thresholds are in each Signal 1-6 detail section below.
+        </p>
+        <div class="card score-summary">
+          <p><strong>Decision Rule:</strong> <span id="ruleText">-</span></p>
+          <p><strong>Failed Independent Families:</strong> <span id="failCount">-</span></p>
+          <p><strong>Verdict:</strong> <span id="verdictText">-</span></p>
+        </div>
+        <div id="signalCards" class="signal-grid"></div>
+      </section>
+
+      <section class="panel" id="data-health">
+        <h2>Data Health and Baseline Integrity</h2>
+        <p>
+          Before anomaly scoring, we verify basic integrity conditions. If these are broken, downstream forensics can produce misleading conclusions.
+          This section shows structural checks, suppression consistency, and missingness profile so the rest of the interpretation is anchored in data quality context.
+        </p>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Integrity Checks</h3>
+            <ul id="healthChecks"></ul>
+          </div>
+          <div class="card">
+            <h3>Missingness by Column</h3>
+            <table>
+              <thead><tr><th>Column</th><th>Missing %</th></tr></thead>
+              <tbody id="missingnessTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="payment-mechanics">
+        <h2>Signal 1 Detail: Reimbursement Ratio Clustering</h2>
+        <p>
+          We group records by HCPCS procedure code and evaluate variability in implied unit payment. The coefficient of variation (CV) tells us how large
+          the spread is relative to the average. Extremely high CV across heavily used codes can indicate a mixture of incompatible regimes, value injection,
+          transformation artifacts, or data generation inconsistencies.
+        </p>
+        <div class="card">
+          <h3>Top Suspicious HCPCS (from computed table)</h3>
+          <table>
+            <thead><tr><th>HCPCS</th><th>Claims</th><th>CV</th><th>Score</th></tr></thead>
+            <tbody id="hcpcsTable"></tbody>
+          </table>
+        </div>
+        <div class="card" id="signal1Box">
+          <h3>Signal 1 Result</h3>
+          <p id="signal1Status">-</p>
+          <p id="signal1Explain">-</p>
+          <ul id="signal1Metrics"></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="digit-forensics">
+        <h2>Signal 2 Detail: Last Digit Analysis</h2>
+        <p>
+          We inspect the final cents digit (0-9) of implied unit payment (<code>TOTAL_PAID / TOTAL_CLAIMS</code>). Human editing and scripted generation often create unnatural endpoint preferences.
+          For example, too many values ending in specific digits can be a warning sign. This check compares observed digit shares to a simple reference pattern.
+        </p>
+        <div class="card">
+          <h3>Cents Last-Digit Distribution</h3>
+          <canvas id="digitChart" width="920" height="280" aria-label="digit chart"></canvas>
+        </div>
+        <div class="card" id="signal2Box">
+          <h3>Signal 2 Result</h3>
+          <p id="signal2Status">-</p>
+          <p id="signal2Explain">-</p>
+          <ul id="signal2Metrics"></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="relationships">
+        <h2>Signal 3 Detail: Correlation Structure</h2>
+        <p>
+          Some fields should track each other because they come from the same operational process. Weak linkage in key pairs can imply that parts of the dataset
+          were generated under different assumptions or modified independently.
+        </p>
+        <div class="card">
+          <h3>Core Correlations</h3>
+          <table>
+            <thead><tr><th>Pair</th><th>Correlation</th></tr></thead>
+            <tbody id="corrTable"></tbody>
+          </table>
+        </div>
+        <div class="card" id="signal3Box">
+          <h3>Signal 3 Result</h3>
+          <p id="signal3Status">-</p>
+          <p id="signal3Explain">-</p>
+          <ul id="signal3Metrics"></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="time-series">
+        <h2>Signal 4 Detail: Temporal Noise</h2>
+        <p>
+          We test month-level behavior for unrealistic smoothness. Natural operational data usually has shocks, seasonal pulses, and uneven swings.
+          Extremely smooth movement can be suspicious; moderate variability is often expected in real-world systems.
+        </p>
+        <div class="card">
+          <h3>Monthly Volatility (Delta Standard Deviation)</h3>
+          <canvas id="volChart" width="920" height="280" aria-label="volatility chart"></canvas>
+        </div>
+        <div class="card" id="signal4Box">
+          <h3>Signal 4 Result</h3>
+          <p id="signal4Status">-</p>
+          <p id="signal4Explain">-</p>
+          <ul id="signal4Metrics"></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="entropy-detail">
+        <h2>Signal 5 Detail: Entropy</h2>
+        <p>
+          Entropy measures how much variety exists in implied unit-payment endings. We use last-two-cent endings as a compact fingerprint. If diversity is too low,
+          it can suggest templating, repetition, or generated values instead of natural operational variation.
+        </p>
+        <div class="card" id="signal5Box">
+          <h3>Entropy Result</h3>
+          <p id="signal5Status">-</p>
+          <p id="signal5Explain">-</p>
+          <ul id="signal5Metrics"></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="benford-detail">
+        <h2>Signal 6 Detail: Benford (Supporting Signal)</h2>
+        <p>
+          Benford is evaluated only on provider-year aggregates in this framework. This is intentionally the final supporting signal, not a primary detector
+          for row-level healthcare billing data.
+        </p>
+        <div class="card" id="signal6Box">
+          <h3>Benford Result</h3>
+          <p id="signal6Status">-</p>
+          <p id="signal6Explain">-</p>
+          <ul id="signal6Metrics"></ul>
+        </div>
+      </section>
+
+      <section class="panel" id="methodology">
+        <h2>Methodology and Interpretation Notes</h2>
+        <ol>
+          <li>Compute standardized outputs from the parquet source file into JSON and CSV artifacts.</li>
+          <li>Apply six checks in fixed order, each with predefined thresholds.</li>
+          <li>Group checks into independent signal families and apply the rule: 3 or more failed families triggers a dataset-level altered/synthetic flag.</li>
+          <li>Treat Benford as final supporting evidence only, not as a primary detector for healthcare billing rows.</li>
+          <li>Use this as an integrity triage tool and follow with deeper domain review, not as standalone legal proof.</li>
+        </ol>
+      </section>
+
+      <section class="panel" id="appendix">
+        <h2>Appendix and Artifacts</h2>
+        <p>
+          Main machine outputs consumed by this page:
+          <code>outputs/json/report_by_state.json</code>,
+          <code>outputs/json/signal_score_by_state.json</code>,
+          with fallback to <code>outputs/json/report.json</code> and <code>outputs/json/signal_score.json</code>,
+          <code>outputs/tables/unit_price_top_suspicious_hcpcs.csv</code>, and
+          <code>outputs/tables/monthly_aggregates_by_state.csv</code>.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Dataset-integrity analysis page. This report flags statistical signals and should be interpreted with domain and policy context.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+    <script src="app.js?v=12"></script>
+  </body>
+</html>
