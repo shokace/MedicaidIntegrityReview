@@ -1,14 +1,15 @@
 {
   "rule": "If 3+ independent signal families fail -> dataset likely synthetic or altered",
-  "fail_count": 2,
+  "calibration": "null_model_baseline",
+  "fail_count": 0,
   "family_total": 5,
-  "raw_fail_count": 3,
+  "raw_fail_count": 0,
   "family_failures": {
     "reimbursement_ratio_clustering": false,
-    "digit_structure_family": true,
-    "correlation_structure": true,
+    "digit_structure_family": false,
+    "correlation_structure": false,
     "temporal_noise": false,
-    "benford_supporting": false
+    "heaping_grid_spacing": false
   },
   "signals": [
     {
@@ -16,50 +17,65 @@
       "failed": false,
       "metrics": {
         "basis": "top_volume_hcpcs",
-        "median_cv": 1.448132041610374,
-        "p90_cv": 4.45038561156561
+        "median_cv": 1.448132041610386,
+        "p90_cv": 4.450385611565227,
+        "threshold_median_cv_hi": 1.4661426453354718,
+        "threshold_p90_cv_hi": 7.448818445919578
       }
     },
     {
       "name": "Last digit analysis",
-      "failed": true,
+      "failed": false,
       "metrics": {
         "basis": "unit_paid",
         "max_abs_dev": 0.16265827111833173,
-        "chi_like": 0.29404795472602435
+        "chi_like": 0.29404795472602435,
+        "threshold_max_abs_dev_hi": 0.27806715452286146,
+        "threshold_chi_like_hi": 0.8408185781274446
       }
     },
     {
       "name": "Correlation structure",
-      "failed": true,
+      "failed": false,
       "metrics": {
-        "scope": "within_hcpcs_top200_median",
-        "ben_claims": 0.5088717540187285,
-        "ben_paid": 0.1934225065434099,
-        "claims_paid": 0.7470577199619567
+        "scope": "within_hcpcs_top200_median_or_proxy",
+        "ben_claims": 0.5088717540186484,
+        "ben_paid": 0.1934225065434288,
+        "claims_paid": 0.7470577199625519,
+        "threshold_ben_claims_lo": 0.3573984097660095,
+        "threshold_ben_paid_lo": 0.10130902296996756,
+        "threshold_claims_paid_lo": 0.1866295046492259
       }
     },
     {
       "name": "Temporal noise",
       "failed": false,
       "metrics": {
-        "acf1_total_paid": 0.8899485634386731,
-        "smooth_ratio": 0.10781251996962633
+        "acf1_total_paid": 0.8899485634386709,
+        "smooth_ratio": 0.10781251996963162,
+        "threshold_acf1_hi": 0.9901351444244048,
+        "threshold_smooth_ratio_lo": 0.09295583532790468
       }
     },
     {
       "name": "Entropy",
-      "failed": true,
+      "failed": false,
       "metrics": {
         "basis": "unit_paid",
-        "normalized_entropy_last2": 0.9183221424529806
+        "normalized_entropy_last2": 0.9183221424529806,
+        "threshold_entropy_lo": 0.8235074138033499
       }
     },
     {
-      "name": "Benford (provider-year)",
+      "name": "Heaping detection (grid spacing)",
       "failed": false,
       "metrics": {
-        "chi_like": 2.529278746277481e-05
+        "basis": "unit_paid_cents_last2",
+        "share_on_5c_grid": 0.34621898167166903,
+        "share_on_25c_grid": 0.2107673886331108,
+        "max_cent_bucket_share": 0.1830971534722,
+        "threshold_share_on_25c_grid_hi": 0.33187753329740244,
+        "threshold_max_cent_bucket_share_hi": 0.3110845731686469
       }
     }
   ],

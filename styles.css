@@ -388,3 +388,40 @@ footer {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.84rem;
 }
+
+.state-outliers-card {
+  margin-top: 12px;
+}
+
+.risk-chip {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+}
+
+.risk-chip.risk-high {
+  color: #ffd2cc;
+  background: #56261d;
+  border-color: #934436;
+}
+
+.risk-chip.risk-elevated {
+  color: #ffe8b6;
+  background: #58421f;
+  border-color: #9f7d35;
+}
+
+.risk-chip.risk-watch {
+  color: #fff7c9;
+  background: #4e4a20;
+  border-color: #888139;
+}
+
+.risk-chip.risk-low {
+  color: #d8efe1;
+  background: #234336;
+  border-color: #3d7a60;
+}

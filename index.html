@@ -44,8 +44,8 @@
           if <strong>3 or more independent signal families fail</strong>, the dataset is flagged as <strong>likely synthetic or altered</strong> at the dataset level.
         </p>
         <p>
-          This is a <strong>screening framework</strong>. It is best used as a data integrity warning system. It does not by itself prove criminal conduct,
-          intent, or payer/provider fraud. It only says whether the dataset behaves like a naturally generated system output under these tests.
+          This is a <strong>screening framework</strong>. It detects dataset-level transformation and aggregation artifacts. It is not a row-level fraud detector,
+          not a billing-abuse detector, and not legal proof of illegal activity.
         </p>
       </section>
 
@@ -75,15 +75,20 @@
               Temporal means over time. Noise is natural month-to-month irregularity. Real systems are usually messy. If a long time series is too smooth,
               it can mean someone generated numbers to look clean rather than capturing real operational variation.
             </p>
-            <h3>What is "Benford"?</h3>
+            <h3>What is "heaping"?</h3>
             <p>
-              Benford's Law predicts how often first digits (1 through 9) appear in many naturally occurring datasets. In healthcare claims,
-              Benford can be misused on the wrong level. We only use it on broad aggregates as a final supporting check, never as a primary proof.
+              Heaping means values cluster on specific payment-grid steps (for example, cents ending on 00, 25, 50, 75).
+              In healthcare reimbursement, some heaping is expected, but extreme concentration can indicate transformation artifacts.
             </p>
             <h3>What does "fail" mean here?</h3>
             <p>
               Fail means the metric crossed a pre-set threshold in a way that is unusual under this methodology. It does not mean guilt.
               It means the dataset deserves extra validation before high-stakes decisions are made.
+            </p>
+            <h3>Why healthcare can look irregular</h3>
+            <p>
+              Healthcare payment is heavily rule-driven: HCPCS/CPT fee schedules, RVU conversion, negotiated reimbursement grids, and shared beneficiaries across providers.
+              These operational mechanics can produce artifacts in aggregated data even when no row-level fabrication exists.
             </p>
           </div>
         </div>
@@ -100,6 +105,28 @@
           <p id="stateSelectionNote">State: ALL</p>
         </div>
         <div id="usMap" class="us-map" aria-label="Interactive United States map"></div>
+        <div class="card state-outliers-card">
+          <h3>Provider Peer-Group Outlier Ranking</h3>
+          <p id="peerOutlierSummary">
+            Providers are ranked by peer-relative outlier score within the selected geography. This is a screening signal, not legal proof.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Provider NPI</th>
+                <th>State</th>
+                <th>Risk</th>
+                <th>Outlier Score</th>
+                <th>Rows >= 3 sigma</th>
+                <th>Peer Cells</th>
+                <th>Total Claims</th>
+                <th>Total Paid</th>
+              </tr>
+            </thead>
+            <tbody id="peerOutlierTable"></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="panel" id="scorecard">
@@ -229,14 +256,14 @@
         </div>
       </section>
 
-      <section class="panel" id="benford-detail">
-        <h2>Signal 6 Detail: Benford (Supporting Signal)</h2>
+      <section class="panel" id="heaping-detail">
+        <h2>Signal 6 Detail: Heaping Detection (Grid Spacing)</h2>
         <p>
-          Benford is evaluated only on provider-year aggregates in this framework. This is intentionally the final supporting signal, not a primary detector
-          for row-level healthcare billing data.
+          This signal measures how strongly implied unit-payment cents cluster on reimbursement-grid spacing.
+          Some heaping is operationally normal in healthcare pricing. The objective is to detect unusually strong concentration that can suggest transformation artifacts.
         </p>
         <div class="card" id="signal6Box">
-          <h3>Benford Result</h3>
+          <h3>Heaping Result</h3>
           <p id="signal6Status">-</p>
           <p id="signal6Explain">-</p>
           <ul id="signal6Metrics"></ul>
@@ -247,11 +274,42 @@
         <h2>Methodology and Interpretation Notes</h2>
         <ol>
           <li>Compute standardized outputs from the parquet source file into JSON and CSV artifacts.</li>
-          <li>Apply six checks in fixed order, each with predefined thresholds.</li>
-          <li>Group checks into independent signal families and apply the rule: 3 or more failed families triggers a dataset-level altered/synthetic flag.</li>
-          <li>Treat Benford as final supporting evidence only, not as a primary detector for healthcare billing rows.</li>
+          <li>Apply six checks in fixed order, with thresholds calibrated from a null-model baseline.</li>
+          <li>Treat Last Digit and Entropy as one structural family because both probe the same discretization phenomenon.</li>
+          <li>Group checks into independent signal families and apply the rule: 3 or more failed families triggers a dataset-level warning state.</li>
+          <li>Interpret results in payer-mechanics context (fee schedules, RVU factors, reimbursement grids, shared beneficiaries).</li>
           <li>Use this as an integrity triage tool and follow with deeper domain review, not as standalone legal proof.</li>
+          <li>Calibrate thresholds with null-model simulation benchmarking (realistic payer-process bootstraps versus artifacted synthetic generators).</li>
         </ol>
+      </section>
+
+      <section class="panel" id="payer-mechanics">
+        <h2>Payer Mechanics Context</h2>
+        <p>
+          Correlation weakness in aggregated healthcare data can reflect payment-system design, not fabrication. These mechanics matter when interpreting signal failures:
+        </p>
+        <div class="grid-2">
+          <div class="card prose-block">
+            <h3>CPT/HCPCS Fee Schedules</h3>
+            <p>
+              Many services are paid from predefined code-level schedules. This can create repeated reimbursement patterns and non-uniform value spacing in aggregates.
+            </p>
+            <h3>RVU Conversion Factors</h3>
+            <p>
+              Payments may be derived from RVU formulas and conversion factors. Small policy changes can shift amounts systematically across many claims at once.
+            </p>
+          </div>
+          <div class="card prose-block">
+            <h3>Negotiated Reimbursement Grids</h3>
+            <p>
+              Contracted rates are often stepped or banded by code/category and payer. This can produce heaping and cluster effects that are operational, not synthetic.
+            </p>
+            <h3>Shared Beneficiaries Across Providers</h3>
+            <p>
+              The same beneficiaries may appear across multiple providers and services. In rolled-up data, this can blur expected pairwise correlations without implying fabrication.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section class="panel" id="appendix">
@@ -260,6 +318,7 @@
           Main machine outputs consumed by this page:
           <code>outputs/json/report_by_state.json</code>,
           <code>outputs/json/signal_score_by_state.json</code>,
+          <code>outputs/json/provider_peer_outliers_by_state.json</code>,
           with fallback to <code>outputs/json/report.json</code> and <code>outputs/json/signal_score.json</code>,
           <code>outputs/tables/unit_price_top_suspicious_hcpcs.csv</code>, and
           <code>outputs/tables/monthly_aggregates_by_state.csv</code>.
@@ -273,6 +332,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>

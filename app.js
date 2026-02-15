@@ -51,7 +51,12 @@ const fallback = {
       smooth_ratio: 0.08
     }
   },
-  benford: { chi_like: 0.02 }
+  heaping: {
+    basis: "unit_paid_cents_last2",
+    share_on_5c_grid: 0.34,
+    share_on_25c_grid: 0.21,
+    max_cent_bucket_share: 0.18
+  }
 };
 
 const fallbackScore = {
@@ -66,7 +71,7 @@ const fallbackScore = {
     { name: "Correlation structure", failed: false, metrics: { scope: "within_hcpcs_top200_median", ben_claims: 0.74, ben_paid: 0.64, claims_paid: 0.83 } },
     { name: "Temporal noise", failed: false, metrics: { acf1_total_paid: 0.92, smooth_ratio: 0.08 } },
     { name: "Entropy", failed: true, metrics: { basis: "unit_paid", normalized_entropy_last2: 0.89 } },
-    { name: "Benford (provider-year)", failed: false, metrics: { chi_like: 0.02 } }
+    { name: "Heaping detection (grid spacing)", failed: false, metrics: { basis: "unit_paid_cents_last2", share_on_5c_grid: 0.34, share_on_25c_grid: 0.21, max_cent_bucket_share: 0.18 } }
   ]
 };
 
@@ -82,36 +87,46 @@ const fallbackScoreBundle = {
   scores: { ALL: fallbackScore }
 };
 
+const fallbackPeerOutlierBundle = {
+  default_state: "ALL",
+  available_states: ["ALL"],
+  methodology: {
+    peer_cell: "state x HCPCS_CODE x CLAIM_FROM_MONTH",
+    disclaimer: "Provider outlier ranking is a screening signal and is not legal proof of fraud."
+  },
+  outliers: { ALL: [] }
+};
+
 const explanations = {
   "Reimbursement ratio clustering": {
     what: "This checks how much implied payment-per-claim varies inside each procedure code. The metric CV (coefficient of variation) is spread divided by average.",
     why: "When CV is very high across high-volume procedures, it can indicate unstable or mixed generation patterns that need review.",
-    thresholds: "Fail rule used on top-volume HCPCS: median CV > 3.0 or 90th percentile CV > 8.0."
+    thresholds: "Fail thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
   },
   "Last digit analysis": {
     what: "This checks whether cents ending digits (0 through 9) of implied unit payment are unnaturally imbalanced.",
     why: "Human-edited or scripted values often overuse certain endings. Natural data can still have bias, but extreme skew is suspicious.",
-    thresholds: "Fail rule used: max deviation from 10% baseline > 5 percentage points or chi-like score > 0.25."
+    thresholds: "Fail thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
   },
   "Correlation structure": {
     what: "This checks whether key fields still move together in expected ways within high-volume HCPCS strata.",
     why: "If related fields become weakly connected after controlling for service mix, data may have been transformed inconsistently.",
-    thresholds: "Fail rule used on median within-code correlations: claims-paid < 0.6 or beneficiaries-claims < 0.4 or beneficiaries-paid < 0.2."
+    thresholds: "Lower-bound thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
   },
   "Temporal noise": {
     what: "This checks month-to-month behavior for unrealistic smoothness.",
     why: "Real systems usually show noise and shocks; synthetic series can look too smooth.",
-    thresholds: "Fail rule used: acf1 > 0.97 and smoothness ratio < 0.03."
+    thresholds: "Joint thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
   },
   Entropy: {
     what: "This measures variety in last-two-cent endings of implied unit payment using normalized entropy (0 to 1).",
     why: "Lower entropy means too much repetition, which can appear in templated or copied values.",
-    thresholds: "Fail rule used: normalized entropy < 0.92."
+    thresholds: "Lower-bound threshold is calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
   },
-  "Benford (provider-year)": {
-    what: "This compares first-digit distribution of provider-year totals against Benford expectations.",
-    why: "It is a supporting aggregate-level signal only, used last and interpreted cautiously.",
-    thresholds: "Fail rule used: chi-like distance > 0.08."
+  "Heaping detection (grid spacing)": {
+    what: "This checks how often implied unit-payment cents land on reimbursement-grid steps (especially 5-cent and 25-cent spacing).",
+    why: "Grid-based payment systems create some heaping naturally, but extreme concentration can indicate transformation artifacts.",
+    thresholds: "Upper-bound thresholds are calibrated from the null-model baseline. See threshold_* metrics in the signal detail box."
   }
 };
 
@@ -121,7 +136,7 @@ const SIGNAL_SECTION_IDS = {
   "Correlation structure": "relationships",
   "Temporal noise": "time-series",
   Entropy: "entropy-detail",
-  "Benford (provider-year)": "benford-detail"
+  "Heaping detection (grid spacing)": "heaping-detail"
 };
 
 const STATE_NAMES = {
@@ -247,11 +262,13 @@ const FIPS_TO_STATE = {
 const fmtPct = (n) => `${(n * 100).toFixed(2)}%`;
 const fmtNum = (n) => Number(n).toLocaleString();
 const fmtN = (n) => Number(n).toFixed(3);
+const fmtUsd = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
 const chartState = new WeakMap();
 
 let activeState = "ALL";
 let reportBundle = fallbackReportBundle;
 let scoreBundle = fallbackScoreBundle;
+let peerOutlierBundle = fallbackPeerOutlierBundle;
 let mapPaths = null;
 let mapPuertoRicoPath = null;
 
@@ -309,8 +326,18 @@ async function loadScoreBundle() {
 }
 
 async function loadData() {
-  const [reports, scores] = await Promise.all([loadReportBundle(), loadScoreBundle()]);
-  return { reports, scores };
+  const [reports, scores, peerOutliers] = await Promise.all([loadReportBundle(), loadScoreBundle(), loadPeerOutlierBundle()]);
+  return { reports, scores, peerOutliers };
+}
+
+async function loadPeerOutlierBundle() {
+  try {
+    const bundle = await loadJSON("outputs/json/provider_peer_outliers_by_state.json");
+    if (bundle && bundle.outliers) return bundle;
+  } catch (_err) {
+    // fall through
+  }
+  return fallbackPeerOutlierBundle;
 }
 
 function row(html) {
@@ -434,10 +461,10 @@ function findingText(signal) {
       ? "This failed because value diversity was low enough to indicate possible repetition beyond expected operational behavior."
       : "This passed because value diversity remained high enough to avoid repetition concerns.";
   }
-  if (name === "Benford (provider-year)") {
+  if (name === "Heaping detection (grid spacing)") {
     return f
-      ? "This supporting signal failed on provider-year aggregates, indicating first-digit structure drifted from Benford expectations."
-      : "This supporting signal passed: provider-year first-digit frequencies were close to Benford expectations.";
+      ? "This failed because unit-payment cents were overly concentrated at reimbursement-grid spacing, beyond the configured tolerance."
+      : "This passed because heaping at reimbursement-grid spacing stayed within the configured tolerance.";
   }
   return f ? "This signal failed under configured thresholds." : "This signal passed under configured thresholds.";
 }
@@ -577,7 +604,7 @@ function renderScore(score) {
     explain: "signal5Explain",
     metrics: "signal5Metrics"
   });
-  renderSignalDetailBox("Benford (provider-year)", {
+  renderSignalDetailBox("Heaping detection (grid spacing)", {
     box: "signal6Box",
     status: "signal6Status",
     explain: "signal6Explain",
@@ -662,10 +689,12 @@ function stateDisplayName(code) {
 function collectAvailableStates() {
   const fromReports = reportBundle.available_states || [];
   const fromScores = scoreBundle.available_states || [];
+  const fromOutliers = peerOutlierBundle.available_states || [];
   const fromReportKeys = Object.keys(reportBundle.reports || {});
   const fromScoreKeys = Object.keys(scoreBundle.scores || {});
+  const fromOutlierKeys = Object.keys(peerOutlierBundle.outliers || {});
 
-  const merged = new Set([...fromReports, ...fromScores, ...fromReportKeys, ...fromScoreKeys]);
+  const merged = new Set([...fromReports, ...fromScores, ...fromOutliers, ...fromReportKeys, ...fromScoreKeys, ...fromOutlierKeys]);
   if (!merged.has("ALL")) merged.add("ALL");
 
   const ordered = Array.from(merged).filter(Boolean);
@@ -685,6 +714,52 @@ function resolveReportForState(state) {
 
 function resolveScoreForState(state) {
   return (scoreBundle.scores && scoreBundle.scores[state]) || scoreBundle.scores?.ALL || fallbackScore;
+}
+
+function resolvePeerOutliersForState(state) {
+  return (peerOutlierBundle.outliers && peerOutlierBundle.outliers[state]) || [];
+}
+
+function outlierRiskClass(label) {
+  if (label === "HIGH") return "risk-high";
+  if (label === "ELEVATED") return "risk-elevated";
+  if (label === "WATCH") return "risk-watch";
+  return "risk-low";
+}
+
+function renderPeerOutliers() {
+  const body = document.getElementById("peerOutlierTable");
+  const summary = document.getElementById("peerOutlierSummary");
+  if (!body || !summary) return;
+
+  const rows = resolvePeerOutliersForState(activeState);
+  const method = peerOutlierBundle.methodology || {};
+  const scope = activeState === "ALL" ? "national scope" : `${stateDisplayName(activeState)} scope`;
+  summary.textContent = `Top providers in ${scope}, ranked by peer-relative outlier score (${method.peer_cell || "state-level provider peers"}). This is an anomaly-screening signal, not legal proof.`;
+
+  body.innerHTML = "";
+  if (!rows.length) {
+    body.appendChild(row(`<td colspan="9">No provider outliers met the minimum peer-cell and volume thresholds for ${stateDisplayName(activeState)}.</td>`));
+    return;
+  }
+
+  rows.slice(0, 25).forEach((r) => {
+    const risk = String(r.risk_label || "LOW");
+    const stateCode = String(r.provider_state || activeState || "UNK");
+    body.appendChild(
+      row(
+        `<td>${fmtNum(r.rank || 0)}</td>
+         <td><code>${r.provider_npi || "-"}</code></td>
+         <td>${stateCode}</td>
+         <td><span class="risk-chip ${outlierRiskClass(risk)}">${risk}</span></td>
+         <td>${fmtN(r.outlier_score || 0)}</td>
+         <td>${fmtPct(r.share_rows_ge_3sigma || 0)}</td>
+         <td>${fmtNum(r.peer_cells_scored || 0)}</td>
+         <td>${fmtNum(r.total_claims || 0)}</td>
+         <td>${fmtUsd(r.total_paid || 0)}</td>`
+      )
+    );
+  });
 }
 
 function updateStateNote() {
@@ -707,6 +782,7 @@ function renderActiveState() {
   const score = resolveScoreForState(activeState);
   renderReport(report);
   renderScore(score);
+  renderPeerOutliers();
   updateStateNote();
   updateMapActiveState();
 }
@@ -839,9 +915,10 @@ async function renderUSMap(states) {
   container.appendChild(svg.node());
 }
 
-loadData().then(async ({ reports, scores }) => {
+loadData().then(async ({ reports, scores, peerOutliers }) => {
   reportBundle = reports || fallbackReportBundle;
   scoreBundle = scores || fallbackScoreBundle;
+  peerOutlierBundle = peerOutliers || fallbackPeerOutlierBundle;
 
   const states = collectAvailableStates();
   const defaultState = reportBundle.default_state || scoreBundle.default_state || "ALL";

@@ -11,6 +11,7 @@ Static website shell for publishing Medicaid data-generation forensics findings.
 Primary runtime inputs:
 - `outputs/json/report_by_state.json`
 - `outputs/json/signal_score_by_state.json`
+- `outputs/json/provider_peer_outliers_by_state.json`
 
 Fallback inputs (legacy/single-state mode):
 - `outputs/json/report.json`
@@ -27,6 +28,7 @@ The by-state bundle is expected to include:
 - `default_state`
 - `available_states`
 - `reports` / `scores` keyed by state code (`ALL`, `CA`, `NY`, etc.)
+- `outliers` keyed by state code for provider peer-group ranking
 
 If files are missing, the site falls back to built-in demo values.
 
@@ -34,6 +36,13 @@ If files are missing, the site falls back to built-in demo values.
 From this folder:
 
 ```bash
+# Heavy build (recompute report artifacts from parquet):
+./.venv/bin/python -u src/report.py
+
+# Fast rebuild (recompute signal verdicts from existing report JSON only):
+./.venv/bin/python -u src/signal_score.py
+
+# Serve frontend:
 python3 -m http.server 8080
 ```
 
@@ -41,6 +50,11 @@ Then open:
 - `http://localhost:8080`
 
 ## Notes
-- Benford is presented as supporting evidence only, not a standalone fraud proof.
-- Preferred execution order remains: Data Health -> Unit Price -> Digits -> Temporal -> Relationships -> Benford.
+- Scientific scope: this tool detects dataset-level transformation/aggregation artifacts, not row-level fraud or legal wrongdoing.
+- Last Digit + Entropy are treated as one structural family to avoid double-counting related discretization effects.
+- Signal 6 uses reimbursement-grid heaping detection (5-cent/25-cent spacing) instead of Benford.
+- State Lens includes a Peer Group Outliers tab that ranks provider NPIs by peer-relative z-score screening metrics.
+- Thresholds are calibrated from a null-model baseline written to `outputs/json/null_model_baseline.json`.
+- Preferred execution order remains: Data Health -> Unit Price -> Digits -> Temporal -> Relationships -> Heaping.
 - The U.S. map supports hover and selected-state highlighting. Territories and `UNK` remain selectable via dropdown.
+- Null-model calibration uses realistic bootstrap samples and artifacted synthetic contrast samples.

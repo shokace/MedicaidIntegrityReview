@@ -1,0 +1,47 @@
+{
+  "method": "empirical_null_bootstrap_plus_artifacted_synthetic",
+  "notes": "Thresholds are calibrated from a realistic null-model bootstrap of observed state metrics. Synthetic artifacted samples are used as a contrast model.",
+  "n_observed_states": 54,
+  "n_realistic_samples": 6480,
+  "n_synthetic_samples": 6480,
+  "thresholds": {
+    "ratio_median_cv_hi": 1.4661426453354718,
+    "ratio_p90_cv_hi": 7.448818445919578,
+    "digit_max_dev_hi": 0.27806715452286146,
+    "digit_chi_hi": 0.8408185781274446,
+    "corr_ben_claims_lo": 0.3573984097660095,
+    "corr_ben_paid_lo": 0.10130902296996756,
+    "corr_claims_paid_lo": 0.1866295046492259,
+    "temporal_acf1_hi": 0.9901351444244048,
+    "temporal_smooth_ratio_lo": 0.09295583532790468,
+    "entropy_lo": 0.8235074138033499,
+    "heaping_share_25c_hi": 0.33187753329740244,
+    "heaping_max_bucket_hi": 0.3110845731686469
+  },
+  "benchmark": {
+    "realistic": {
+      "family_fail_count": {
+        "mean": 0.18179012345679013,
+        "p50": 0.0,
+        "p90": 1.0
+      },
+      "raw_fail_count": {
+        "mean": 0.2029320987654321,
+        "p50": 0.0,
+        "p90": 1.0
+      }
+    },
+    "synthetic": {
+      "family_fail_count": {
+        "mean": 3.287962962962963,
+        "p50": 3.0,
+        "p90": 4.0
+      },
+      "raw_fail_count": {
+        "mean": 3.6344135802469135,
+        "p50": 4.0,
+        "p90": 5.0
+      }
+    }
+  }
+}

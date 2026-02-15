@@ -17,6 +17,7 @@ OUT_TMP = Path("outputs/tmp")
 
 REPORT_ALL_PATH = OUT_JSON / "report.json"
 REPORT_BY_STATE_PATH = OUT_JSON / "report_by_state.json"
+PROVIDER_PEER_OUTLIERS_PATH = OUT_JSON / "provider_peer_outliers_by_state.json"
 TOP_SUSPICIOUS_PATH = OUT_TABLES / "unit_price_top_suspicious_hcpcs.csv"
 TOP_VOLUME_PATH = OUT_TABLES / "unit_price_top_volume_hcpcs.csv"
 MONTHLY_ALL_PATH = OUT_TABLES / "monthly_aggregates.csv"
@@ -158,7 +159,12 @@ def blank_report(state: str) -> dict:
             },
             "noise_features": {"acf1_total_paid": 0.0, "smooth_ratio": 0.0},
         },
-        "benford": {"chi_like": 0.0},
+        "heaping": {
+            "basis": "unit_paid_cents_last2",
+            "share_on_5c_grid": 0.0,
+            "share_on_25c_grid": 0.0,
+            "max_cent_bucket_share": 0.0,
+        },
     }
 
 
@@ -676,17 +682,21 @@ def build_correlations(reports: dict[str, dict], con: duckdb.DuckDBPyConnection)
 
 
 def build_ratios(reports: dict[str, dict], con: duckdb.DuckDBPyConnection) -> None:
-    rows = con.execute(
+    con.execute(
         f"""
-        WITH d AS (
-          SELECT
-            {STATE_EXPR} AS state,
-            TOTAL_PAID / NULLIF(TOTAL_CLAIMS, 0) AS paid_per_claim,
-            TOTAL_CLAIMS / NULLIF(TOTAL_UNIQUE_BENEFICIARIES, 0) AS claims_per_ben,
-            TOTAL_PAID / NULLIF(TOTAL_UNIQUE_BENEFICIARIES, 0) AS paid_per_ben
-          FROM medicaid_enriched
-          WHERE TOTAL_CLAIMS > 0 AND TOTAL_UNIQUE_BENEFICIARIES > 0
-        )
+        CREATE OR REPLACE TEMP TABLE ratios_base AS
+        SELECT
+          {STATE_EXPR} AS state,
+          TOTAL_PAID / NULLIF(TOTAL_CLAIMS, 0) AS paid_per_claim,
+          TOTAL_CLAIMS / NULLIF(TOTAL_UNIQUE_BENEFICIARIES, 0) AS claims_per_ben,
+          TOTAL_PAID / NULLIF(TOTAL_UNIQUE_BENEFICIARIES, 0) AS paid_per_ben
+        FROM medicaid_enriched
+        WHERE TOTAL_CLAIMS > 0 AND TOTAL_UNIQUE_BENEFICIARIES > 0
+        """
+    )
+
+    state_rows = con.execute(
+        """
         SELECT
           state,
           APPROX_QUANTILE(paid_per_claim, 0.01) AS paid_per_claim_p01,
@@ -698,9 +708,13 @@ def build_ratios(reports: dict[str, dict], con: duckdb.DuckDBPyConnection) -> No
           APPROX_QUANTILE(paid_per_ben, 0.01) AS paid_per_ben_p01,
           APPROX_QUANTILE(paid_per_ben, 0.50) AS paid_per_ben_p50,
           APPROX_QUANTILE(paid_per_ben, 0.99) AS paid_per_ben_p99
-        FROM d
+        FROM ratios_base
         GROUP BY 1
-        UNION ALL
+        """
+    ).fetchall()
+
+    all_rows = con.execute(
+        """
         SELECT
           'ALL' AS state,
           APPROX_QUANTILE(paid_per_claim, 0.01) AS paid_per_claim_p01,
@@ -712,9 +726,11 @@ def build_ratios(reports: dict[str, dict], con: duckdb.DuckDBPyConnection) -> No
           APPROX_QUANTILE(paid_per_ben, 0.01) AS paid_per_ben_p01,
           APPROX_QUANTILE(paid_per_ben, 0.50) AS paid_per_ben_p50,
           APPROX_QUANTILE(paid_per_ben, 0.99) AS paid_per_ben_p99
-        FROM d
+        FROM ratios_base
         """
     ).fetchall()
+
+    rows = state_rows + all_rows
 
     for row in rows:
         state = str(row[0])
@@ -794,89 +810,315 @@ def build_temporal(reports: dict[str, dict], con: duckdb.DuckDBPyConnection) -> 
         rpt["temporal"]["monthly_csv"] = str(MONTHLY_ALL_PATH)
 
 
-def build_benford(reports: dict[str, dict], con: duckdb.DuckDBPyConnection) -> None:
-    state_rows = con.execute(
+def build_heaping(reports: dict[str, dict]) -> None:
+    for state, rpt in reports.items():
+        dist = (
+            rpt.get("digits", {}).get("unit_paid_cents_last2_dist")
+            or rpt.get("digits", {}).get("cents_last2_dist")
+            or {}
+        )
+        norm = {int(k): float(v) for k, v in dist.items() if v is not None}
+        if not norm:
+            rpt["heaping"] = {
+                "basis": "unit_paid_cents_last2",
+                "share_on_5c_grid": 0.0,
+                "share_on_25c_grid": 0.0,
+                "max_cent_bucket_share": 0.0,
+            }
+            continue
+
+        share_on_5c = float(sum(v for k, v in norm.items() if k % 5 == 0))
+        share_on_25c = float(sum(v for k, v in norm.items() if k % 25 == 0))
+        max_bucket = float(max(norm.values()) if norm else 0.0)
+        rpt["heaping"] = {
+            "basis": "unit_paid_cents_last2",
+            "share_on_5c_grid": share_on_5c,
+            "share_on_25c_grid": share_on_25c,
+            "max_cent_bucket_share": max_bucket,
+        }
+
+
+def provider_risk_label(outlier_score: float, share_rows_ge_3sigma: float) -> str:
+    if outlier_score >= 3.5 or share_rows_ge_3sigma >= 0.40:
+        return "HIGH"
+    if outlier_score >= 2.8 or share_rows_ge_3sigma >= 0.25:
+        return "ELEVATED"
+    if outlier_score >= 2.2 or share_rows_ge_3sigma >= 0.15:
+        return "WATCH"
+    return "LOW"
+
+
+
+def build_peer_group_outliers(con: duckdb.DuckDBPyConnection, available_states: list[str]) -> dict:
+    con.execute(
         f"""
-        WITH yearly AS (
-          SELECT
-            {STATE_EXPR} AS state,
-            BILLING_PROVIDER_NPI_NUM AS npi,
-            SUBSTR(CLAIM_FROM_MONTH, 1, 4) AS yr,
-            SUM(TOTAL_PAID) AS paid
-          FROM medicaid_enriched
-          WHERE BILLING_PROVIDER_NPI_NUM IS NOT NULL AND CLAIM_FROM_MONTH IS NOT NULL
-          GROUP BY 1, 2, 3
-        ),
-        cleaned AS (
-          SELECT state, ABS(paid) AS x
-          FROM yearly
-          WHERE paid IS NOT NULL AND paid <> 0
-        ),
-        digits AS (
+        CREATE OR REPLACE TEMP TABLE provider_peer_base AS
+        SELECT
+          {STATE_EXPR} AS state,
+          LPAD(CAST(TRY_CAST(BILLING_PROVIDER_NPI_NUM AS BIGINT) AS VARCHAR), 10, '0') AS provider_npi,
+          SUM(CAST(TOTAL_CLAIMS AS DOUBLE)) AS total_claims,
+          SUM(CAST(TOTAL_PAID AS DOUBLE)) AS total_paid,
+          SUM(CAST(TOTAL_UNIQUE_BENEFICIARIES AS DOUBLE)) AS total_bens,
+          APPROX_COUNT_DISTINCT(HCPCS_CODE) AS code_count,
+          APPROX_COUNT_DISTINCT(CLAIM_FROM_MONTH) AS month_count
+        FROM medicaid_enriched
+        WHERE
+          TRY_CAST(BILLING_PROVIDER_NPI_NUM AS BIGINT) IS NOT NULL
+          AND HCPCS_CODE IS NOT NULL
+          AND CLAIM_FROM_MONTH IS NOT NULL
+          AND TOTAL_CLAIMS > 0
+          AND TOTAL_UNIQUE_BENEFICIARIES > 0
+          AND TOTAL_PAID IS NOT NULL
+          AND TOTAL_PAID >= 0
+        GROUP BY 1, 2
+        HAVING
+          SUM(CAST(TOTAL_CLAIMS AS DOUBLE)) >= 500
+          AND SUM(CAST(TOTAL_UNIQUE_BENEFICIARIES AS DOUBLE)) > 0
+          AND ISFINITE(SUM(CAST(TOTAL_PAID AS DOUBLE)) / NULLIF(SUM(CAST(TOTAL_CLAIMS AS DOUBLE)), 0))
+          AND ABS(SUM(CAST(TOTAL_PAID AS DOUBLE)) / NULLIF(SUM(CAST(TOTAL_CLAIMS AS DOUBLE)), 0)) <= {MAX_ABS_UNIT_PAID}
+        """
+    )
+
+    state_df = con.execute(
+        """
+        WITH enriched AS (
           SELECT
             state,
-            CAST(SUBSTR(CAST(x AS VARCHAR), 1, 1) AS INTEGER) AS d
-          FROM cleaned
+            provider_npi,
+            total_claims,
+            total_paid,
+            code_count,
+            month_count,
+            total_paid / NULLIF(total_claims, 0) AS paid_per_claim,
+            total_claims / NULLIF(total_bens, 0) AS claims_per_ben,
+            total_paid / NULLIF(total_bens, 0) AS paid_per_ben
+          FROM provider_peer_base
+          WHERE
+            provider_npi IS NOT NULL
+            AND LENGTH(provider_npi) = 10
+            AND code_count >= 5
+            AND month_count >= 6
         ),
-        c AS (
-          SELECT state, d, COUNT(*)::DOUBLE AS n
-          FROM digits
-          WHERE d BETWEEN 1 AND 9
-          GROUP BY 1, 2
-        ),
-        t AS (
-          SELECT state, SUM(n) AS total
-          FROM c
-          GROUP BY 1
-        )
-        SELECT state, d, n / total AS p
-        FROM c
-        JOIN t USING (state)
-        """
-    ).fetchall()
-
-    all_rows = con.execute(
-        """
-        WITH yearly AS (
+        peer_stats AS (
           SELECT
-            BILLING_PROVIDER_NPI_NUM AS npi,
-            SUBSTR(CLAIM_FROM_MONTH, 1, 4) AS yr,
-            SUM(TOTAL_PAID) AS paid
-          FROM medicaid_enriched
-          WHERE BILLING_PROVIDER_NPI_NUM IS NOT NULL AND CLAIM_FROM_MONTH IS NOT NULL
-          GROUP BY 1, 2
-        ),
-        cleaned AS (
-          SELECT ABS(paid) AS x
-          FROM yearly
-          WHERE paid IS NOT NULL AND paid <> 0
-        ),
-        digits AS (
-          SELECT CAST(SUBSTR(CAST(x AS VARCHAR), 1, 1) AS INTEGER) AS d
-          FROM cleaned
-        ),
-        c AS (
-          SELECT d, COUNT(*)::DOUBLE AS n
-          FROM digits
-          WHERE d BETWEEN 1 AND 9
+            state,
+            COUNT(*) AS peer_n,
+            AVG(paid_per_claim) AS mu_paid_per_claim,
+            STDDEV_SAMP(paid_per_claim) AS sd_paid_per_claim,
+            AVG(claims_per_ben) AS mu_claims_per_ben,
+            STDDEV_SAMP(claims_per_ben) AS sd_claims_per_ben,
+            AVG(paid_per_ben) AS mu_paid_per_ben,
+            STDDEV_SAMP(paid_per_ben) AS sd_paid_per_ben
+          FROM enriched
           GROUP BY 1
+          HAVING COUNT(*) >= 30
         ),
-        t AS (
-          SELECT SUM(n) AS total
-          FROM c
+        scored AS (
+          SELECT
+            e.state,
+            e.provider_npi,
+            e.total_claims,
+            e.total_paid,
+            e.code_count,
+            e.month_count,
+            LEAST(ABS((e.paid_per_claim - p.mu_paid_per_claim) / NULLIF(p.sd_paid_per_claim, 0)), 12.0) AS z_paid_per_claim,
+            LEAST(ABS((e.claims_per_ben - p.mu_claims_per_ben) / NULLIF(p.sd_claims_per_ben, 0)), 12.0) AS z_claims_per_ben,
+            LEAST(ABS((e.paid_per_ben - p.mu_paid_per_ben) / NULLIF(p.sd_paid_per_ben, 0)), 12.0) AS z_paid_per_ben
+          FROM enriched e
+          JOIN peer_stats p
+            ON e.state = p.state
+        ),
+        ranked AS (
+          SELECT
+            state,
+            provider_npi,
+            total_claims,
+            total_paid,
+            code_count,
+            month_count,
+            z_paid_per_claim,
+            z_claims_per_ben,
+            z_paid_per_ben,
+            (z_paid_per_claim + z_claims_per_ben + z_paid_per_ben) / 3.0 AS outlier_score,
+            GREATEST(z_paid_per_claim, z_claims_per_ben, z_paid_per_ben) AS p95_row_abs_z,
+            (
+              (CASE WHEN z_paid_per_claim >= 3.0 THEN 1.0 ELSE 0.0 END)
+              + (CASE WHEN z_claims_per_ben >= 3.0 THEN 1.0 ELSE 0.0 END)
+              + (CASE WHEN z_paid_per_ben >= 3.0 THEN 1.0 ELSE 0.0 END)
+            ) / 3.0 AS share_rows_ge_3sigma,
+            ROW_NUMBER() OVER (
+              PARTITION BY state
+              ORDER BY (z_paid_per_claim + z_claims_per_ben + z_paid_per_ben) / 3.0 DESC, total_claims DESC
+            ) AS rank_in_state
+          FROM scored
         )
-        SELECT 'ALL' AS state, d, n / total AS p
-        FROM c, t
+        SELECT
+          state,
+          provider_npi,
+          rank_in_state,
+          code_count AS peer_cells_scored,
+          total_claims,
+          total_paid,
+          z_paid_per_claim AS weighted_z_paid_per_claim,
+          z_claims_per_ben AS weighted_z_claims_per_ben,
+          z_paid_per_ben AS weighted_z_paid_per_ben,
+          outlier_score,
+          p95_row_abs_z,
+          share_rows_ge_3sigma
+        FROM ranked
+        WHERE rank_in_state <= 100
+        ORDER BY state, rank_in_state
         """
-    ).fetchall()
+    ).fetchdf()
 
-    by_state = dict_from_rows([(str(s), int(d), float(p)) for s, d, p in state_rows + all_rows], key_index=0)
-    exp_ben = {d: math.log10(1 + 1 / d) for d in range(1, 10)}
+    all_df = con.execute(
+        """
+        WITH enriched AS (
+          SELECT
+            state,
+            provider_npi,
+            total_claims,
+            total_paid,
+            code_count,
+            month_count,
+            total_paid / NULLIF(total_claims, 0) AS paid_per_claim,
+            total_claims / NULLIF(total_bens, 0) AS claims_per_ben,
+            total_paid / NULLIF(total_bens, 0) AS paid_per_ben
+          FROM provider_peer_base
+          WHERE
+            provider_npi IS NOT NULL
+            AND LENGTH(provider_npi) = 10
+            AND code_count >= 5
+            AND month_count >= 6
+        ),
+        global_stats AS (
+          SELECT
+            AVG(paid_per_claim) AS mu_paid_per_claim,
+            STDDEV_SAMP(paid_per_claim) AS sd_paid_per_claim,
+            AVG(claims_per_ben) AS mu_claims_per_ben,
+            STDDEV_SAMP(claims_per_ben) AS sd_claims_per_ben,
+            AVG(paid_per_ben) AS mu_paid_per_ben,
+            STDDEV_SAMP(paid_per_ben) AS sd_paid_per_ben
+          FROM enriched
+        ),
+        scored AS (
+          SELECT
+            e.state,
+            e.provider_npi,
+            e.total_claims,
+            e.total_paid,
+            e.code_count,
+            LEAST(ABS((e.paid_per_claim - g.mu_paid_per_claim) / NULLIF(g.sd_paid_per_claim, 0)), 12.0) AS z_paid_per_claim,
+            LEAST(ABS((e.claims_per_ben - g.mu_claims_per_ben) / NULLIF(g.sd_claims_per_ben, 0)), 12.0) AS z_claims_per_ben,
+            LEAST(ABS((e.paid_per_ben - g.mu_paid_per_ben) / NULLIF(g.sd_paid_per_ben, 0)), 12.0) AS z_paid_per_ben
+          FROM enriched e
+          CROSS JOIN global_stats g
+        ),
+        ranked AS (
+          SELECT
+            'ALL' AS state,
+            provider_npi,
+            state AS primary_state,
+            ROW_NUMBER() OVER (
+              ORDER BY (z_paid_per_claim + z_claims_per_ben + z_paid_per_ben) / 3.0 DESC, total_claims DESC
+            ) AS rank_in_state,
+            code_count AS peer_cells_scored,
+            total_claims,
+            total_paid,
+            z_paid_per_claim AS weighted_z_paid_per_claim,
+            z_claims_per_ben AS weighted_z_claims_per_ben,
+            z_paid_per_ben AS weighted_z_paid_per_ben,
+            (z_paid_per_claim + z_claims_per_ben + z_paid_per_ben) / 3.0 AS outlier_score,
+            GREATEST(z_paid_per_claim, z_claims_per_ben, z_paid_per_ben) AS p95_row_abs_z,
+            (
+              (CASE WHEN z_paid_per_claim >= 3.0 THEN 1.0 ELSE 0.0 END)
+              + (CASE WHEN z_claims_per_ben >= 3.0 THEN 1.0 ELSE 0.0 END)
+              + (CASE WHEN z_paid_per_ben >= 3.0 THEN 1.0 ELSE 0.0 END)
+            ) / 3.0 AS share_rows_ge_3sigma
+          FROM scored
+        )
+        SELECT
+          state,
+          provider_npi,
+          primary_state,
+          rank_in_state,
+          peer_cells_scored,
+          total_claims,
+          total_paid,
+          weighted_z_paid_per_claim,
+          weighted_z_claims_per_ben,
+          weighted_z_paid_per_ben,
+          outlier_score,
+          p95_row_abs_z,
+          share_rows_ge_3sigma
+        FROM ranked
+        WHERE rank_in_state <= 200
+        ORDER BY rank_in_state
+        """
+    ).fetchdf()
 
-    for state, rows in by_state.items():
-        obs = {int(d): float(p) for _, d, p in rows}
-        chi = sum(((obs.get(d, 0.0) - exp_ben[d]) ** 2) / exp_ben[d] for d in range(1, 10))
-        ensure_report(reports, state)["benford"]["chi_like"] = float(chi)
+    outliers: dict[str, list[dict]] = {state: [] for state in ["ALL"] + list(available_states)}
+
+    for r in state_df.itertuples(index=False):
+        state = str(r.state)
+        outliers.setdefault(state, [])
+        score = pct(getattr(r, "outlier_score", 0.0))
+        share = pct(getattr(r, "share_rows_ge_3sigma", 0.0))
+        outliers[state].append(
+            {
+                "rank": int(getattr(r, "rank_in_state", 0) or 0),
+                "provider_npi": str(getattr(r, "provider_npi", "")),
+                "provider_state": state,
+                "peer_cells_scored": int(getattr(r, "peer_cells_scored", 0) or 0),
+                "total_claims": float(getattr(r, "total_claims", 0.0) or 0.0),
+                "total_paid": float(getattr(r, "total_paid", 0.0) or 0.0),
+                "weighted_z_paid_per_claim": pct(getattr(r, "weighted_z_paid_per_claim", 0.0)),
+                "weighted_z_claims_per_ben": pct(getattr(r, "weighted_z_claims_per_ben", 0.0)),
+                "weighted_z_paid_per_ben": pct(getattr(r, "weighted_z_paid_per_ben", 0.0)),
+                "outlier_score": score,
+                "p95_row_abs_z": pct(getattr(r, "p95_row_abs_z", 0.0)),
+                "share_rows_ge_3sigma": share,
+                "risk_label": provider_risk_label(score, share),
+            }
+        )
+
+    for r in all_df.itertuples(index=False):
+        score = pct(getattr(r, "outlier_score", 0.0))
+        share = pct(getattr(r, "share_rows_ge_3sigma", 0.0))
+        outliers["ALL"].append(
+            {
+                "rank": int(getattr(r, "rank_in_state", 0) or 0),
+                "provider_npi": str(getattr(r, "provider_npi", "")),
+                "provider_state": str(getattr(r, "primary_state", "UNK") or "UNK"),
+                "peer_cells_scored": int(getattr(r, "peer_cells_scored", 0) or 0),
+                "total_claims": float(getattr(r, "total_claims", 0.0) or 0.0),
+                "total_paid": float(getattr(r, "total_paid", 0.0) or 0.0),
+                "weighted_z_paid_per_claim": pct(getattr(r, "weighted_z_paid_per_claim", 0.0)),
+                "weighted_z_claims_per_ben": pct(getattr(r, "weighted_z_claims_per_ben", 0.0)),
+                "weighted_z_paid_per_ben": pct(getattr(r, "weighted_z_paid_per_ben", 0.0)),
+                "outlier_score": score,
+                "p95_row_abs_z": pct(getattr(r, "p95_row_abs_z", 0.0)),
+                "share_rows_ge_3sigma": share,
+                "risk_label": provider_risk_label(score, share),
+            }
+        )
+
+    return {
+        "default_state": "ALL",
+        "available_states": ["ALL"] + list(available_states),
+        "methodology": {
+            "peer_cell": "state-level provider peers",
+            "min_peer_size": 30,
+            "min_provider_peer_cells_state": 5,
+            "min_provider_peer_cells_all": 5,
+            "min_claims_state": 500,
+            "min_claims_all": 500,
+            "z_clip": 12.0,
+            "score_definition": "mean absolute z-score across provider paid_per_claim, claims_per_ben, and paid_per_ben within peer group",
+            "disclaimer": "Provider outlier ranking is a screening signal and is not legal proof of fraud.",
+        },
+        "outliers": outliers,
+    }
 
 
 def normalize_reports(reports: dict[str, dict]) -> dict[str, dict]:
@@ -907,13 +1149,16 @@ def main() -> None:
     OUT_TABLES.mkdir(parents=True, exist_ok=True)
     OUT_TMP.mkdir(parents=True, exist_ok=True)
 
-    db_path = OUT_TMP / "report_work.duckdb"
-    if db_path.exists():
-        db_path.unlink()
+    for stale in OUT_TMP.glob("report_work*.duckdb*"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
 
+    db_path = OUT_TMP / f"report_work_{int(time.time())}.duckdb"
     con = duckdb.connect(str(db_path))
-    con.execute("PRAGMA threads=2")
-    con.execute("SET memory_limit='3GB'")
+    con.execute("PRAGMA threads=4")
+    con.execute("SET memory_limit='6GB'")
     con.execute("PRAGMA temp_directory='outputs/tmp'")
     con.execute("PRAGMA max_temp_directory_size='300GiB'")
     con.execute("PRAGMA preserve_insertion_order=false")
@@ -942,8 +1187,8 @@ def main() -> None:
     checkpoint("Completed ratio summaries")
     build_temporal(reports, con)
     checkpoint("Completed signal 4 inputs (temporal)")
-    build_benford(reports, con)
-    checkpoint("Completed signal 6 inputs (benford)")
+    build_heaping(reports)
+    checkpoint("Completed signal 6 inputs (heaping)")
 
     reports = normalize_reports(reports)
     if "ALL" not in reports:
@@ -953,6 +1198,9 @@ def main() -> None:
     if "UNK" in reports:
         available_states.append("UNK")
 
+    peer_outliers = build_peer_group_outliers(con, available_states)
+    checkpoint("Completed provider peer outlier modeling")
+
     bundle = {
         "default_state": "ALL",
         "available_states": ["ALL"] + available_states,
@@ -961,10 +1209,12 @@ def main() -> None:
 
     REPORT_ALL_PATH.write_text(json.dumps(reports["ALL"], indent=2), encoding="utf-8")
     REPORT_BY_STATE_PATH.write_text(json.dumps(bundle, indent=2), encoding="utf-8")
+    PROVIDER_PEER_OUTLIERS_PATH.write_text(json.dumps(peer_outliers, indent=2), encoding="utf-8")
 
     checkpoint("Wrote all report artifacts")
     print(f"Wrote {REPORT_ALL_PATH}")
     print(f"Wrote {REPORT_BY_STATE_PATH}")
+    print(f"Wrote {PROVIDER_PEER_OUTLIERS_PATH}")
     print(f"Wrote {TOP_SUSPICIOUS_PATH}")
     print(f"Wrote {TOP_VOLUME_PATH}")
     print(f"Wrote {MONTHLY_ALL_PATH}")
