@@ -12,6 +12,11 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   font-family: "Chivo", sans-serif;
@@ -324,6 +329,29 @@ footer a:hover {
   color: #c7d3dd;
 }
 
+.def-item {
+  border: 1px solid #385062;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(23, 33, 41, 0.32);
+  margin-bottom: 8px;
+}
+
+.def-item:last-child {
+  margin-bottom: 0;
+}
+
+.def-item summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #eaf2f7;
+}
+
+.def-item p {
+  margin: 8px 0 0;
+  color: #c7d3dd;
+}
+
 @media (max-width: 860px) {
   .signal-grid {
     grid-template-columns: 1fr;
@@ -487,6 +515,17 @@ footer a:hover {
   transform: translateY(0);
 }
 
+.info-label.is-open::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.info-label:focus-visible {
+  outline: 2px solid #8fd8ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .risk-chip {
   display: inline-block;
   font-family: "IBM Plex Mono", monospace;
@@ -521,42 +560,79 @@ footer a:hover {
 }
 
 @media (max-width: 680px) {
+  body {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .noise {
+    display: none;
+  }
+
   header.hero {
-    padding: 26px 14px 14px;
+    padding: 22px 12px 10px;
   }
 
   main {
-    padding: 6px 12px 32px;
+    padding: 4px 10px 28px;
     gap: 10px;
   }
 
-  .panel {
-    padding: 12px;
-    border-radius: 14px;
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.07em;
   }
 
-  .card {
+  h1 {
+    margin: 8px 0 10px;
+    font-size: clamp(1.65rem, 7vw, 2.1rem);
+    line-height: 1.08;
+  }
+
+  .panel {
     padding: 10px;
     border-radius: 12px;
   }
 
+  .card {
+    padding: 9px;
+    border-radius: 10px;
+  }
+
   .subtitle {
-    font-size: 0.94rem;
-    line-height: 1.45;
+    font-size: 0.92rem;
+    line-height: 1.38;
   }
 
   h2 {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
   }
 
   h3 {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+  }
+
+  .hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .hero-grid .card.stat {
+    grid-column: span 1;
+  }
+
+  .stat strong {
+    font-size: 1.18rem;
+    margin-top: 4px;
   }
 
   th,
   td {
-    padding: 7px 5px;
-    font-size: 0.84rem;
+    padding: 6px 4px;
+    font-size: 0.8rem;
   }
 
   .state-controls {
@@ -570,16 +646,39 @@ footer a:hover {
   }
 
   .us-map {
-    min-height: 250px;
+    min-height: 220px;
   }
 
   .table-wide table {
-    min-width: 760px;
+    min-width: 700px;
   }
 
   .info-label::after {
-    width: min(280px, 85vw);
+    width: min(250px, 82vw);
     left: auto;
     right: 0;
+  }
+
+  .metric-note {
+    font-size: 0.8rem;
+  }
+
+  .def-item {
+    padding: 7px 8px;
+    border-radius: 9px;
+  }
+
+  .def-item summary {
+    font-size: 0.95rem;
+  }
+
+  .def-item p {
+    font-size: 0.92rem;
+    line-height: 1.35;
+  }
+
+  footer {
+    padding: 0 12px 34px;
+    font-size: 0.84rem;
   }
 }

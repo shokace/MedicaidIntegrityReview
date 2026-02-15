@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <link rel="stylesheet" href="styles.css?v=9" />
   </head>
   <body>
     <div class="noise"></div>
@@ -48,43 +48,57 @@
         <h2>Plain-Language Definitions</h2>
         <div class="grid-2">
           <div class="card prose-block">
-            <h3>What is a "ratio"?</h3>
-            <p>
-              A ratio is one number divided by another. Here, an important one is <code>TOTAL_PAID / TOTAL_CLAIMS</code>,
-              which is like payment per claim. If this swings too much in similar situations, something may be off.
-            </p>
-            <h3>What is "correlation"?</h3>
-            <p>
-              Correlation shows how strongly two things move together. It ranges from -1 to +1.
-              In this dataset, some pairs should move together. If they do not, data structure may have changed.
-            </p>
-            <h3>What is "entropy"?</h3>
-            <p>
-              Entropy is a measure of variety. High entropy means values are spread out. Low entropy means too much repetition.
-              Too much repetition can point to templated or overly processed data.
-            </p>
+            <details class="def-item">
+              <summary>What is a "ratio"?</summary>
+              <p>
+                A ratio is one number divided by another. Here, an important one is <code>TOTAL_PAID / TOTAL_CLAIMS</code>,
+                which is like payment per claim. If this swings too much in similar situations, something may be off.
+              </p>
+            </details>
+            <details class="def-item">
+              <summary>What is "correlation"?</summary>
+              <p>
+                Correlation shows how strongly two things move together. It ranges from -1 to +1.
+                In this dataset, some pairs should move together. If they do not, data structure may have changed.
+              </p>
+            </details>
+            <details class="def-item">
+              <summary>What is "entropy"?</summary>
+              <p>
+                Entropy is a measure of variety. High entropy means values are spread out. Low entropy means too much repetition.
+                Too much repetition can point to templated or overly processed data.
+              </p>
+            </details>
           </div>
           <div class="card prose-block">
-            <h3>What is "temporal noise"?</h3>
-            <p>
-              Temporal means over time. Real data usually has month-to-month bumps.
-              If a long timeline looks too smooth, it may not reflect normal operations.
-            </p>
-            <h3>What is "heaping"?</h3>
-            <p>
-              Heaping means values bunch up at specific price steps (for example cents ending in 00, 25, 50, 75).
-              Some heaping is normal in healthcare payments, but too much can be a warning sign.
-            </p>
-            <h3>What does "fail" mean here?</h3>
-            <p>
-              Fail means a metric crossed a cutoff that we treat as unusual. It does not mean guilt.
-              It means that part of the data needs closer review.
-            </p>
-            <h3>Why healthcare can look irregular</h3>
-            <p>
-              Healthcare payment uses many rules (fee schedules, conversion formulas, contract grids, and shared patients across providers).
-              Those rules can create strange-looking patterns even when data was not fabricated.
-            </p>
+            <details class="def-item">
+              <summary>What is "temporal noise"?</summary>
+              <p>
+                Temporal means over time. Real data usually has month-to-month bumps.
+                If a long timeline looks too smooth, it may not reflect normal operations.
+              </p>
+            </details>
+            <details class="def-item">
+              <summary>What is "heaping"?</summary>
+              <p>
+                Heaping means values bunch up at specific price steps (for example cents ending in 00, 25, 50, 75).
+                Some heaping is normal in healthcare payments, but too much can be a warning sign.
+              </p>
+            </details>
+            <details class="def-item">
+              <summary>What does "fail" mean here?</summary>
+              <p>
+                Fail means a metric crossed a cutoff that we treat as unusual. It does not mean guilt.
+                It means that part of the data needs closer review.
+              </p>
+            </details>
+            <details class="def-item">
+              <summary>Why healthcare can look irregular</summary>
+              <p>
+                Healthcare payment uses many rules (fee schedules, conversion formulas, contract grids, and shared patients across providers).
+                Those rules can create strange-looking patterns even when data was not fabricated.
+              </p>
+            </details>
           </div>
         </div>
       </section>
@@ -350,6 +364,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=22"></script>
   </body>
 </html>

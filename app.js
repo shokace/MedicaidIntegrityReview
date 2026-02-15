@@ -900,6 +900,67 @@ function updateStateNote() {
   note.textContent = `Selected area: ${stateDisplayName(activeState)}`;
 }
 
+function setupInfoLabelInteractions() {
+  const labels = Array.from(document.querySelectorAll(".info-label"));
+  if (!labels.length) return;
+
+  const closeAll = (except = null) => {
+    labels.forEach((label) => {
+      if (label !== except) {
+        label.classList.remove("is-open");
+        label.setAttribute("aria-expanded", "false");
+      }
+    });
+  };
+
+  labels.forEach((label, idx) => {
+    if (!label.dataset.boundInfoLabel) {
+      label.setAttribute("role", "button");
+      label.setAttribute("tabindex", "0");
+      label.setAttribute("aria-expanded", "false");
+      label.setAttribute("aria-label", label.textContent.trim() || `Info ${idx + 1}`);
+
+      label.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const willOpen = !label.classList.contains("is-open");
+        closeAll();
+        if (willOpen) {
+          label.classList.add("is-open");
+          label.setAttribute("aria-expanded", "true");
+        }
+      });
+
+      label.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          label.click();
+          return;
+        }
+        if (ev.key === "Escape") {
+          closeAll();
+          label.blur();
+        }
+      });
+
+      label.dataset.boundInfoLabel = "1";
+    }
+  });
+
+  if (!document.body.dataset.boundInfoLabelClose) {
+    document.addEventListener("click", () => closeAll());
+    document.addEventListener(
+      "touchstart",
+      (ev) => {
+        if (!ev.target || !(ev.target instanceof Element)) return;
+        if (!ev.target.closest(".info-label")) closeAll();
+      },
+      { passive: true }
+    );
+    document.body.dataset.boundInfoLabelClose = "1";
+  }
+}
+
 function updateMapActiveState() {
   if (mapPaths) {
     mapPaths.classed("active", (d) => (FIPS_TO_STATE[String(d.id).padStart(2, "0")] || "") === activeState);
@@ -1066,6 +1127,7 @@ loadData().then(async ({ reports, scores, peerOutliers }) => {
   const defaultState = reportBundle.default_state || scoreBundle.default_state || "ALL";
   setupStateSelector(states, defaultState);
   await renderUSMap(states);
+  setupInfoLabelInteractions();
   window.addEventListener("resize", scheduleMapResize);
   renderActiveState();
 });
