@@ -1153,15 +1153,19 @@ async function renderUSMap(states) {
 
   const prFeature = geo.features.find((d) => codeFor(d) === "PR");
   if (prFeature) {
-    const insetW = 138;
-    const insetH = 84;
-    const insetPad = 12;
+    const isMobile = window.innerWidth <= 680;
+    const insetW = isMobile ? Math.min(96, Math.max(74, Math.round(width * 0.22))) : 138;
+    const insetH = isMobile ? Math.round(insetW * 0.62) : 84;
+    const insetPad = isMobile ? 8 : 12;
     const insetX = width - insetW - insetPad;
     const insetY = height - insetH - insetPad;
+    const xPad = isMobile ? 7 : 10;
+    const yPadTop = isMobile ? 8 : 14;
+    const yPadBottom = isMobile ? 13 : 20;
     const prProjection = window.d3.geoMercator().fitExtent(
       [
-        [10, 14],
-        [insetW - 10, insetH - 20]
+        [xPad, yPadTop],
+        [insetW - xPad, insetH - yPadBottom]
       ],
       prFeature
     );
@@ -1186,12 +1190,12 @@ async function renderUSMap(states) {
     inset
       .append("text")
       .attr("x", insetW / 2)
-      .attr("y", insetH - 7)
+      .attr("y", insetH - (isMobile ? 5 : 7))
       .attr("text-anchor", "middle")
       .attr("fill", "#cdd9e4")
-      .attr("font-size", "10px")
+      .attr("font-size", isMobile ? "8px" : "10px")
       .attr("font-family", "IBM Plex Mono, monospace")
-      .text("Puerto Rico");
+      .text(isMobile ? "PR" : "Puerto Rico");
   }
 
   container.appendChild(svg.node());
