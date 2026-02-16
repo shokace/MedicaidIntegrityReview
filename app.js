@@ -367,6 +367,18 @@ function getTooltip() {
   return el;
 }
 
+function getInfoTooltip() {
+  let el = document.getElementById("infoTooltip");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "infoTooltip";
+    el.className = "chart-tooltip info-tooltip";
+    el.style.display = "none";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
 function ensureReadout(canvas) {
   const id = `${canvas.id || "chart"}Readout`;
   let el = document.getElementById(id);
@@ -903,14 +915,48 @@ function updateStateNote() {
 function setupInfoLabelInteractions() {
   const labels = Array.from(document.querySelectorAll(".info-label"));
   if (!labels.length) return;
+  const tooltip = getInfoTooltip();
+  let pinnedLabel = null;
 
-  const closeAll = (except = null) => {
+  const positionTooltip = (label) => {
+    const rect = label.getBoundingClientRect();
+    const margin = 8;
+    tooltip.style.maxWidth = `${Math.max(220, Math.min(320, window.innerWidth - margin * 2))}px`;
+    tooltip.style.display = "block";
+
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+    let left = rect.left;
+    let top = rect.bottom + 10;
+
+    if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+    if (left < margin) left = margin;
+    if (top + th > window.innerHeight - margin) top = rect.top - th - 10;
+    if (top < margin) top = margin;
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  };
+
+  const showTooltip = (label) => {
+    const text = label.getAttribute("data-help") || "";
+    if (!text) return;
+    tooltip.textContent = text;
+    positionTooltip(label);
+  };
+
+  const hideTooltip = () => {
+    tooltip.style.display = "none";
+    tooltip.textContent = "";
+  };
+
+  const closeAll = () => {
+    pinnedLabel = null;
     labels.forEach((label) => {
-      if (label !== except) {
-        label.classList.remove("is-open");
-        label.setAttribute("aria-expanded", "false");
-      }
+      label.classList.remove("is-open");
+      label.setAttribute("aria-expanded", "false");
     });
+    hideTooltip();
   };
 
   labels.forEach((label, idx) => {
@@ -919,16 +965,44 @@ function setupInfoLabelInteractions() {
       label.setAttribute("tabindex", "0");
       label.setAttribute("aria-expanded", "false");
       label.setAttribute("aria-label", label.textContent.trim() || `Info ${idx + 1}`);
+      label.setAttribute("title", label.getAttribute("data-help") || "");
+
+      label.addEventListener("mouseenter", () => {
+        if (pinnedLabel && pinnedLabel !== label) return;
+        showTooltip(label);
+      });
+
+      label.addEventListener("mousemove", () => {
+        if (pinnedLabel && pinnedLabel !== label) return;
+        positionTooltip(label);
+      });
+
+      label.addEventListener("mouseleave", () => {
+        if (pinnedLabel === label) return;
+        hideTooltip();
+      });
 
       label.addEventListener("click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        const willOpen = !label.classList.contains("is-open");
+        const isOpen = pinnedLabel === label;
         closeAll();
-        if (willOpen) {
+        if (!isOpen) {
+          pinnedLabel = label;
           label.classList.add("is-open");
           label.setAttribute("aria-expanded", "true");
+          showTooltip(label);
         }
+      });
+
+      label.addEventListener("focus", () => {
+        if (pinnedLabel && pinnedLabel !== label) return;
+        showTooltip(label);
+      });
+
+      label.addEventListener("blur", () => {
+        if (pinnedLabel === label) return;
+        hideTooltip();
       });
 
       label.addEventListener("keydown", (ev) => {
@@ -957,6 +1031,13 @@ function setupInfoLabelInteractions() {
       },
       { passive: true }
     );
+    window.addEventListener("scroll", () => {
+      if (pinnedLabel) positionTooltip(pinnedLabel);
+    });
+    window.addEventListener("resize", () => {
+      if (pinnedLabel) positionTooltip(pinnedLabel);
+      else hideTooltip();
+    });
     document.body.dataset.boundInfoLabelClose = "1";
   }
 }
@@ -1024,9 +1105,16 @@ async function renderUSMap(states) {
   }
 
   const geo = window.topojson.feature(mapData, mapData.objects.states);
-  const width = Math.max(container.clientWidth || 0, 320);
-  const height = window.innerWidth <= 680 ? 250 : 380;
-  const projection = window.d3.geoAlbersUsa().fitSize([width, height], geo);
+  const viewportWidth = Math.max(window.innerWidth || 0, 320);
+  const width = Math.max(320, Math.min(container.clientWidth || viewportWidth, viewportWidth - 16));
+  const height = window.innerWidth <= 680 ? 220 : 380;
+  const projection = window.d3.geoAlbersUsa().fitExtent(
+    [
+      [8, 8],
+      [width - 8, height - 8]
+    ],
+    geo
+  );
   const path = window.d3.geoPath(projection);
   const codeFor = (d) => FIPS_TO_STATE[String(d.id).padStart(2, "0")] || "";
   const applyStateClasses = (selection) =>

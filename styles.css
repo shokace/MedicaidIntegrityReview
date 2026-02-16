@@ -25,6 +25,7 @@ body {
     radial-gradient(700px 300px at 10% 10%, rgba(242, 169, 0, 0.16), transparent 60%),
     var(--bg);
   color: var(--ink);
+  overflow-x: hidden;
 }
 
 .noise {
@@ -79,6 +80,7 @@ main {
   padding: 6px 20px 48px;
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .panel {
@@ -88,6 +90,7 @@ main {
   padding: 18px;
   box-shadow: 0 10px 30px rgba(31, 42, 28, 0.06);
   animation: rise 620ms ease;
+  min-width: 0;
 }
 
 .grid-2 {
@@ -101,6 +104,7 @@ main {
   border-radius: 14px;
   padding: 12px;
   background: #283640;
+  min-width: 0;
 }
 
 .stat strong {
@@ -146,12 +150,20 @@ table {
 
 .table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .table-wide table {
   min-width: 860px;
+}
+
+.panel p,
+.panel li,
+.panel td,
+.panel th {
+  overflow-wrap: anywhere;
 }
 
 th, td {
@@ -488,42 +500,20 @@ footer a:hover {
 }
 
 .info-label::after {
-  content: attr(data-help);
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
-  width: min(320px, 70vw);
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #4f6476;
-  background: #10181f;
-  color: #e6eef4;
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 0.74rem;
-  line-height: 1.35;
-  white-space: normal;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(4px);
-  transition: opacity 100ms ease, transform 100ms ease;
-  z-index: 20;
-}
-
-.info-label:hover::after {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.info-label.is-open::after {
-  opacity: 1;
-  transform: translateY(0);
+  display: none;
 }
 
 .info-label:focus-visible {
   outline: 2px solid #8fd8ff;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+.info-tooltip {
+  max-width: min(320px, 86vw);
+  white-space: normal;
+  line-height: 1.35;
+  z-index: 10000;
 }
 
 .risk-chip {
@@ -650,13 +640,16 @@ footer a:hover {
   }
 
   .table-wide table {
-    min-width: 700px;
+    min-width: 100%;
   }
 
-  .info-label::after {
-    width: min(250px, 82vw);
-    left: auto;
-    right: 0;
+  .state-outliers-card th:nth-child(n + 6),
+  .state-outliers-card td:nth-child(n + 6) {
+    display: none;
+  }
+
+  .state-outliers-card table {
+    font-size: 0.82rem;
   }
 
   .metric-note {
@@ -680,5 +673,29 @@ footer a:hover {
   footer {
     padding: 0 12px 34px;
     font-size: 0.84rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-grid .card.stat {
+    grid-column: span 1;
+  }
+
+  th,
+  td {
+    font-size: 0.78rem;
+  }
+
+  .table-wide table {
+    min-width: 100%;
+  }
+
+  .state-outliers-card th:nth-child(5),
+  .state-outliers-card td:nth-child(5) {
+    display: none;
   }
 }
