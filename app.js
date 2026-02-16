@@ -634,17 +634,9 @@ function renderSignalDetailBox(signalName, ids) {
 }
 
 function renderScore(score) {
-  document.getElementById("ruleText").textContent = "If 3 or more independent groups fail, flag for deeper review.";
-  const familyTotal = Number(score.family_total ?? 0);
   const familyFailCount = Number(score.fail_count ?? 0);
   const rawFailCount = Number(score.raw_fail_count ?? score.fail_count ?? 0);
   const verdictFailCount = Number.isFinite(rawFailCount) ? rawFailCount : familyFailCount;
-  if (familyTotal > 0) {
-    document.getElementById("failCount").textContent =
-      `${familyFailCount} of ${familyTotal} independent groups failed (${rawFailCount} of ${(score.signals || []).length} total checks failed)`;
-  } else {
-    document.getElementById("failCount").textContent = `${familyFailCount} of ${(score.signals || []).length}`;
-  }
 
   const verdictTextEl = document.getElementById("verdictText");
   const verdictLabelEl = document.getElementById("verdictLabel");
