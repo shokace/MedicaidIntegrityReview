@@ -354,6 +354,7 @@ let mapPaths = null;
 let mapPuertoRicoPath = null;
 let currentMapStates = [];
 let resizeMapTimer = null;
+const peerOutlierExpandedByState = {};
 
 function getTooltip() {
   let el = document.getElementById("chartTooltip");
@@ -873,21 +874,45 @@ function outlierRiskClass(label) {
 
 function renderPeerOutliers() {
   const body = document.getElementById("peerOutlierTable");
+  const toggleBtn = document.getElementById("peerOutlierToggle");
   const summary = document.getElementById("peerOutlierSummary");
-  if (!body || !summary) return;
+  if (!body || !summary || !toggleBtn) return;
 
   const rows = resolvePeerOutliersForState(activeState);
   const method = peerOutlierBundle.methodology || {};
   const scope = activeState === "ALL" ? "national scope" : `${stateDisplayName(activeState)} scope`;
-  summary.textContent = `Top providers in ${scope}, ranked by how different they look from peers (${method.peer_cell || "state-level provider peers"}). A higher risk label means bigger differences, not proof of fraud.`;
+
+  if (!toggleBtn.dataset.bound) {
+    toggleBtn.addEventListener("click", () => {
+      peerOutlierExpandedByState[activeState] = !peerOutlierExpandedByState[activeState];
+      renderPeerOutliers();
+    });
+    toggleBtn.dataset.bound = "1";
+  }
 
   body.innerHTML = "";
   if (!rows.length) {
+    summary.textContent = `No providers in ${stateDisplayName(activeState)} had enough data to score reliably.`;
     body.appendChild(row(`<td colspan="9">No providers in ${stateDisplayName(activeState)} had enough data to score reliably.</td>`));
+    toggleBtn.style.display = "none";
     return;
   }
 
-  rows.slice(0, 25).forEach((r) => {
+  const expanded = !!peerOutlierExpandedByState[activeState];
+  const limit = expanded ? 25 : 3;
+  const shown = rows.slice(0, Math.min(limit, rows.length));
+  summary.textContent =
+    `Top providers in ${scope}, ranked by how different they look from peers (${method.peer_cell || "state-level provider peers"}).` +
+    ` Showing ${shown.length} of ${Math.min(rows.length, 25)} rows. A higher risk label means bigger differences, not proof of fraud.`;
+
+  if (rows.length > 3) {
+    toggleBtn.style.display = "inline-flex";
+    toggleBtn.textContent = expanded ? "Show less" : "Show more";
+  } else {
+    toggleBtn.style.display = "none";
+  }
+
+  shown.forEach((r) => {
     const risk = String(r.risk_label || "LOW");
     const stateCode = String(r.provider_state || activeState || "UNK");
     body.appendChild(

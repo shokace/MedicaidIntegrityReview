@@ -487,6 +487,22 @@ footer a:hover {
   font-family: "IBM Plex Mono", monospace;
 }
 
+.peer-toggle-btn {
+  margin-top: 10px;
+  border: 1px solid #4a5e6f;
+  background: #2d3f4d;
+  color: #eaf2f7;
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.peer-toggle-btn:hover {
+  background: #355061;
+}
+
 .info-label {
   position: relative;
   display: inline-flex;
@@ -656,6 +672,12 @@ footer a:hover {
 
   .state-outliers-card table {
     font-size: 0.82rem;
+  }
+
+  .peer-toggle-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 9px 10px;
   }
 
   .metric-note {

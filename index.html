@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=14" />
   </head>
   <body>
     <div class="noise"></div>
@@ -128,7 +128,6 @@
             Providers are ranked by how far they differ from peers in the selected area.
             This is a screening signal, not legal proof.
           </p>
-          <p class="table-scroll-hint">On mobile, swipe this table left or right to see all columns.</p>
           <div class="table-wrap table-wide">
             <table>
               <thead>
@@ -159,6 +158,7 @@
               <tbody id="peerOutlierTable"></tbody>
             </table>
           </div>
+          <button id="peerOutlierToggle" class="peer-toggle-btn" type="button">Show more</button>
         </div>
       </section>
 
@@ -372,6 +372,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-    <script src="app.js?v=27"></script>
+    <script src="app.js?v=28"></script>
   </body>
 </html>
